@@ -1,4 +1,4 @@
-# HMCTS-compatible payment API POC
+# compatible payment API POC
 
 .NET 8 ASP.NET Core controller API implementing `POST /service-request` and `POST
 /service-request/{service-request-reference}/card-payments`. Swagger is at
