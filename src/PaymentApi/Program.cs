@@ -1,0 +1,29 @@
+using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.EntityFrameworkCore;
+using PaymentApi;
+
+var builder = WebApplication.CreateBuilder(args);
+builder.WebHost.UseUrls($"http://0.0.0.0:{Environment.GetEnvironmentVariable("PORT") ?? "8080"}");
+builder.Services.AddDbContext<PaymentDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("PaymentDb")));
+builder.Services.AddScoped<PaymentService>();
+builder.Services.AddSingleton<IPaymentProvider, FakePaymentProvider>();
+builder.Services.AddHttpClient("callbacks", client => client.Timeout = TimeSpan.FromSeconds(10));
+builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+var app = builder.Build();
+app.UseExceptionHandler(handler => handler.Run(async context =>
+{
+    var error = context.Features.Get<IExceptionHandlerFeature>()?.Error;
+    context.Response.StatusCode = error is BadHttpRequestException ? 400 : 500;
+    await context.Response.WriteAsJsonAsync(new ErrorResponse(
+        error is BadHttpRequestException ? "Invalid request" : "Internal server error"));
+}));
+app.UseSwagger();
+app.UseSwaggerUI();
+app.MapControllers();
+app.Run();
+
+public partial class Program { }
