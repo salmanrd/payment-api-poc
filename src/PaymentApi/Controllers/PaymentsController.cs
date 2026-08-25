@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace PaymentApi.Controllers;
 
 [ApiController]
-[Tags("HMCTS Payments")]
+[Tags("Payments")]
 public sealed class PaymentsController(
     PaymentService payments,
     IConfiguration configuration) : ControllerBase
