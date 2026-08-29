@@ -4,6 +4,38 @@ using Microsoft.EntityFrameworkCore;
 namespace PaymentApi;
 
 public interface IPaymentProvider { string GetCheckoutUrl(string paymentReference); }
+
+public sealed class PaymentQueryService(PaymentDbContext database)
+{
+    public async Task<IReadOnlyList<PaymentReadResponse>> GetAll(CancellationToken cancellationToken) =>
+        await database.Payments.AsNoTracking()
+            .OrderByDescending(payment => payment.Created)
+            .Select(payment => new PaymentReadResponse(
+                payment.Reference,
+                payment.ServiceRequest.Reference,
+                payment.ServiceRequest.CaseReference,
+                payment.ServiceRequest.CcdCaseNumber,
+                payment.Amount,
+                payment.Currency,
+                payment.Status,
+                payment.Created))
+            .ToListAsync(cancellationToken);
+
+    public Task<PaymentReadResponse?> Get(string reference, CancellationToken cancellationToken) =>
+        database.Payments.AsNoTracking()
+            .Where(payment => payment.Reference == reference)
+            .Select(payment => new PaymentReadResponse(
+                payment.Reference,
+                payment.ServiceRequest.Reference,
+                payment.ServiceRequest.CaseReference,
+                payment.ServiceRequest.CcdCaseNumber,
+                payment.Amount,
+                payment.Currency,
+                payment.Status,
+                payment.Created))
+            .SingleOrDefaultAsync(cancellationToken);
+}
+
 public sealed class FakePaymentProvider(IConfiguration configuration) : IPaymentProvider
 {
     public string GetCheckoutUrl(string reference) => $"{configuration["PublicBaseUrl"]?.TrimEnd('/') ?? "http://localhost:8080"}/pay/{reference}";

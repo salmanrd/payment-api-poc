@@ -31,5 +31,31 @@ public sealed class ApiTests(Factory factory) : IClassFixture<Factory>
     [Fact] public async Task Wrong_amount_is_rejected() { var sr = await CreateSr(); var r = await client.PostAsJsonAsync($"/service-request/{sr}/card-payments", new { currency = "GBP", amount = 11m, returnUrl = "https://example.test/return" }); Assert.Equal(HttpStatusCode.BadRequest, r.StatusCode); }
     [Fact] public async Task Unsupported_currency_is_rejected() { var sr = await CreateSr(); var r = await client.PostAsJsonAsync($"/service-request/{sr}/card-payments", new { currency = "EUR", amount = 10m, returnUrl = "https://example.test/return" }); Assert.Equal(HttpStatusCode.BadRequest, r.StatusCode); }
     [Fact] public async Task Duplicate_active_payment_is_idempotent() { var sr = await CreateSr(); var body = new { currency = "GBP", amount = 10m, returnUrl = "https://example.test/return" }; var a = await client.PostAsJsonAsync($"/service-request/{sr}/card-payments", body); var b = await client.PostAsJsonAsync($"/service-request/{sr}/card-payments", body); Assert.Equal((await a.Content.ReadFromJsonAsync<CardPaymentResponse>())!.PaymentReference, (await b.Content.ReadFromJsonAsync<CardPaymentResponse>())!.PaymentReference); }
+    [Fact] public async Task Payments_can_be_listed_and_retrieved()
+    {
+        var sr = await CreateSr();
+        var created = await client.PostAsJsonAsync($"/service-request/{sr}/card-payments", new { currency = "GBP", amount = 10m, returnUrl = "https://example.test/return" });
+        var reference = (await created.Content.ReadFromJsonAsync<CardPaymentResponse>())!.PaymentReference;
+        var list = await client.GetFromJsonAsync<List<PaymentReadResponse>>("/payments");
+        var details = await client.GetFromJsonAsync<PaymentReadResponse>($"/payments/{reference}");
+        Assert.Contains(list!, payment => payment.PaymentReference == reference);
+        Assert.Equal(sr, details!.ServiceRequestReference);
+        Assert.Equal(10m, details.Amount);
+    }
+    [Fact] public async Task Missing_payment_read_is_not_found() => Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/payments/does-not-exist")).StatusCode);
+    [Fact] public async Task Payments_ui_supports_search_and_details()
+    {
+        var sr = await CreateSr();
+        var created = await client.PostAsJsonAsync($"/service-request/{sr}/card-payments", new { currency = "GBP", amount = 10m, returnUrl = "https://example.test/return" });
+        var reference = (await created.Content.ReadFromJsonAsync<CardPaymentResponse>())!.PaymentReference;
+        var list = await client.GetAsync($"/payments-ui?search={reference}&status=Initiated");
+        var listHtml = await list.Content.ReadAsStringAsync();
+        var details = await client.GetAsync($"/payments-ui/{reference}");
+        Assert.Equal(HttpStatusCode.OK, list.StatusCode);
+        Assert.Contains(reference, listHtml);
+        Assert.Equal(HttpStatusCode.OK, details.StatusCode);
+        Assert.Contains("Payment details", await details.Content.ReadAsStringAsync());
+    }
+    [Fact] public async Task Missing_payment_ui_is_not_found() => Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/payments-ui/does-not-exist")).StatusCode);
     [Fact] public async Task Success_persists_history_and_redirects() { var sr = await CreateSr(); var created = await client.PostAsJsonAsync($"/service-request/{sr}/card-payments", new { currency = "GBP", amount = 10m, returnUrl = "https://example.test/return" }); var p = await created.Content.ReadFromJsonAsync<CardPaymentResponse>(); var result = await client.PostAsync($"/pay/{p!.PaymentReference}/success", null); Assert.Equal(HttpStatusCode.Redirect, result.StatusCode); using var scope = factory.Services.CreateScope(); var saved = await scope.ServiceProvider.GetRequiredService<PaymentDbContext>().Payments.Include(x => x.History).SingleAsync(x => x.Reference == p.PaymentReference); Assert.Equal("Success", saved.Status); Assert.Equal(2, saved.History.Count); }
 }

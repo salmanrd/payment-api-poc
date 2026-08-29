@@ -6,8 +6,25 @@ namespace PaymentApi.Controllers;
 [Tags("Payments")]
 public sealed class PaymentsController(
     PaymentService payments,
+    PaymentQueryService paymentQueries,
     IConfiguration configuration) : ControllerBase
 {
+    [HttpGet("/payments")]
+    [ProducesResponseType<IReadOnlyList<PaymentReadResponse>>(StatusCodes.Status200OK)]
+    public async Task<IReadOnlyList<PaymentReadResponse>> GetPayments(CancellationToken cancellationToken) =>
+        await paymentQueries.GetAll(cancellationToken);
+
+    [HttpGet("/payments/{paymentReference}")]
+    [ProducesResponseType<PaymentReadResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<PaymentReadResponse>> GetPayment(
+        string paymentReference,
+        CancellationToken cancellationToken)
+    {
+        var payment = await paymentQueries.Get(paymentReference, cancellationToken);
+        return payment is null ? NotFound() : payment;
+    }
+
     [HttpPost("/service-request")]
     [ProducesResponseType<ServiceRequestResponse>(StatusCodes.Status201Created)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]

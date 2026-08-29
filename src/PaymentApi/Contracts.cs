@@ -35,4 +35,14 @@ public sealed record CardPaymentResponse(
     [property: JsonPropertyName("status")] string Status,
     [property: JsonPropertyName("nextUrl")] string NextUrl);
 
+public sealed record PaymentReadResponse(
+    [property: JsonPropertyName("paymentReference")] string PaymentReference,
+    [property: JsonPropertyName("serviceRequestReference")] string ServiceRequestReference,
+    [property: JsonPropertyName("caseReference")] string? CaseReference,
+    [property: JsonPropertyName("ccdCaseNumber")] string CcdCaseNumber,
+    [property: JsonPropertyName("amount")] decimal Amount,
+    [property: JsonPropertyName("currency")] string Currency,
+    [property: JsonPropertyName("status")] string Status,
+    [property: JsonPropertyName("dateCreated")] DateTimeOffset DateCreated);
+
 public sealed record ErrorResponse([property: JsonPropertyName("error")] string Error);

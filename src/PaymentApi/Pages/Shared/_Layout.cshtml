@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>@ViewData["Title"] - HMCTS Payments prototype</title>
+    <link rel="stylesheet" href="~/css/payments.css" asp-append-version="true" />
+</head>
+<body>
+    <header class="service-header">
+        <div class="page-width header-content">
+            <span class="hmcts-mark" aria-label="HM Courts and Tribunals Service">HMCTS</span>
+            <span class="service-name">Payments</span>
+        </div>
+    </header>
+    <div class="prototype-banner">
+        <div class="page-width"><strong>Prototype</strong><span>This service is for demonstration purposes.</span></div>
+    </div>
+    <main class="page-width main-content" id="main-content">
+        @RenderBody()
+    </main>
+</body>
+</html>

@@ -7,9 +7,11 @@ builder.WebHost.UseUrls($"http://0.0.0.0:{Environment.GetEnvironmentVariable("PO
 builder.Services.AddDbContext<PaymentDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("PaymentDb")));
 builder.Services.AddScoped<PaymentService>();
+builder.Services.AddScoped<PaymentQueryService>();
 builder.Services.AddSingleton<IPaymentProvider, FakePaymentProvider>();
 builder.Services.AddHttpClient("callbacks", client => client.Timeout = TimeSpan.FromSeconds(10));
 builder.Services.AddControllers();
+builder.Services.AddRazorPages();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
@@ -23,7 +25,9 @@ app.UseExceptionHandler(handler => handler.Run(async context =>
 }));
 app.UseSwagger();
 app.UseSwaggerUI();
+app.UseStaticFiles();
 app.MapControllers();
+app.MapRazorPages();
 app.Run();
 
 public partial class Program { }
