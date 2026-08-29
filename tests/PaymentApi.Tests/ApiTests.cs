@@ -57,5 +57,15 @@ public sealed class ApiTests(Factory factory) : IClassFixture<Factory>
         Assert.Contains("Payment details", await details.Content.ReadAsStringAsync());
     }
     [Fact] public async Task Missing_payment_ui_is_not_found() => Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/payments-ui/does-not-exist")).StatusCode);
+    [Fact] public async Task Create_service_request_ui_posts_to_api()
+    {
+        var page = await client.GetAsync("/service-requests/new");
+        var html = await page.Content.ReadAsStringAsync();
+        var script = await client.GetStringAsync("/js/create-service-request.js");
+        Assert.Equal(HttpStatusCode.OK, page.StatusCode);
+        Assert.Contains("Create a service request", html);
+        Assert.Contains("ccdCaseNumber", html);
+        Assert.Contains("fetch(\"/service-request\"", script);
+    }
     [Fact] public async Task Success_persists_history_and_redirects() { var sr = await CreateSr(); var created = await client.PostAsJsonAsync($"/service-request/{sr}/card-payments", new { currency = "GBP", amount = 10m, returnUrl = "https://example.test/return" }); var p = await created.Content.ReadFromJsonAsync<CardPaymentResponse>(); var result = await client.PostAsync($"/pay/{p!.PaymentReference}/success", null); Assert.Equal(HttpStatusCode.Redirect, result.StatusCode); using var scope = factory.Services.CreateScope(); var saved = await scope.ServiceProvider.GetRequiredService<PaymentDbContext>().Payments.Include(x => x.History).SingleAsync(x => x.Reference == p.PaymentReference); Assert.Equal("Success", saved.Status); Assert.Equal(2, saved.History.Count); }
 }

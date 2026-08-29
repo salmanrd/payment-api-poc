@@ -10,6 +10,9 @@ payments with search and status filters and links to payment details. The same
 application also exposes the read-only JSON routes `GET /payments` and
 `GET /payments/{paymentReference}` used by this POC's payment views.
 
+Create a service request from `/service-requests/new`. The form supports one or
+more fees and submits them to the `POST /service-request` API.
+
 ## Local PostgreSQL
 
 1. Install .NET 8 and PostgreSQL 14 or newer.
