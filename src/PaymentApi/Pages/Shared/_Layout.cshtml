@@ -10,7 +10,10 @@
     <header class="service-header">
         <div class="page-width header-content">
             <span class="hmcts-mark" aria-label="HM Courts and Tribunals Service">HMCTS</span>
-            <span class="service-name">Payments</span>
+            <a class="service-name" asp-page="/Payments/Index">Payments</a>
+            <nav class="service-navigation" aria-label="Service navigation">
+                <a asp-page="/ServiceRequests/Create">Create service request</a>
+            </nav>
         </div>
     </header>
     <div class="prototype-banner">

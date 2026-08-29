@@ -1,0 +1,73 @@
+@page "/service-requests/new"
+@model PaymentApi.Pages.ServiceRequests.CreateModel
+@{
+    ViewData["Title"] = "Create a service request";
+}
+
+<a class="back-link" asp-page="/Payments/Index">Back to payments</a>
+
+<div class="form-page">
+    <h1>Create a service request</h1>
+    <p class="lede">Enter the case and fee details to create a new service request.</p>
+
+    <div id="form-error" class="message message-error" role="alert" tabindex="-1" hidden>
+        <h2>There is a problem</h2>
+        <p id="form-error-message">Check the information you entered.</p>
+    </div>
+
+    <form id="service-request-form">
+        <fieldset>
+            <legend>Case details</legend>
+            <div class="form-group stacked-group">
+                <label for="ccd-case-number">CCD case number</label>
+                <div class="hint" id="ccd-case-number-hint">The 16-digit reference for the case</div>
+                <input id="ccd-case-number" name="ccdCaseNumber" inputmode="numeric" autocomplete="off"
+                       aria-describedby="ccd-case-number-hint" required />
+            </div>
+            <div class="form-group stacked-group">
+                <label for="case-reference">Case reference <span class="optional">(optional)</span></label>
+                <input id="case-reference" name="caseReference" autocomplete="off" />
+            </div>
+            <div class="form-group stacked-group">
+                <label for="callback-url">Callback URL</label>
+                <div class="hint" id="callback-url-hint">We will send payment status updates to this URL</div>
+                <input id="callback-url" name="callBackUrl" type="url" aria-describedby="callback-url-hint"
+                       placeholder="https://example.com/payment-status" required />
+            </div>
+        </fieldset>
+
+        <fieldset>
+            <legend>Fee details</legend>
+            <div id="fees">
+                <div class="fee-row" data-fee>
+                    <div class="form-group">
+                        <label for="fee-code-0">Fee code</label>
+                        <input id="fee-code-0" name="feeCode" autocomplete="off" required />
+                    </div>
+                    <div class="form-group fee-version">
+                        <label for="fee-version-0">Version</label>
+                        <input id="fee-version-0" name="feeVersion" autocomplete="off" required />
+                    </div>
+                    <div class="form-group fee-amount">
+                        <label for="fee-amount-0">Amount</label>
+                        <div class="currency-input"><span aria-hidden="true">£</span><input id="fee-amount-0" name="feeAmount"
+                            type="number" min="0.01" step="0.01" inputmode="decimal" required /></div>
+                    </div>
+                    <button class="button-link remove-fee" type="button" hidden>Remove</button>
+                </div>
+            </div>
+            <button id="add-fee" class="secondary-button" type="button">Add another fee</button>
+        </fieldset>
+
+        <button id="submit-button" type="submit">Create service request</button>
+    </form>
+
+    <section id="service-request-result" class="success-panel" tabindex="-1" hidden>
+        <h2>Service request created</h2>
+        <p>Your service request reference is</p>
+        <strong id="service-request-reference"></strong>
+        <p><a asp-page="/ServiceRequests/Create">Create another service request</a></p>
+    </section>
+</div>
+
+<script src="~/js/create-service-request.js" asp-append-version="true"></script>
