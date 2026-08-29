@@ -5,6 +5,11 @@
 `/swagger`, liveness at `/health`, and the fake provider checkout at the returned
 `nextUrl`. See [CONTRACT.md](CONTRACT.md) for the compatibility scope.
 
+The lightweight payments interface is available at `/payments-ui`. It lists
+payments with search and status filters and links to payment details. The same
+application also exposes the read-only JSON routes `GET /payments` and
+`GET /payments/{paymentReference}` used by this POC's payment views.
+
 ## Local PostgreSQL
 
 1. Install .NET 8 and PostgreSQL 14 or newer.
