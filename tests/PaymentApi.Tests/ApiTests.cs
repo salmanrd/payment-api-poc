@@ -32,6 +32,33 @@ public sealed class ApiTests(Factory factory) : IClassFixture<Factory>
     [Fact] public async Task Service_request_requires_json_content_type() { using var body = new StringContent("ccdCaseNumber=1234567890123456", System.Text.Encoding.UTF8, "text/plain"); var r = await client.PostAsync("/service-request", body); Assert.Equal(HttpStatusCode.UnsupportedMediaType, r.StatusCode); }
     [Fact] public async Task Missing_service_request_is_not_found() { var r = await client.PostAsJsonAsync("/service-request/nope/card-payments", new { currency = "GBP", amount = 10m, returnUrl = "https://example.test/return" }); Assert.Equal(HttpStatusCode.NotFound, r.StatusCode); }
     [Fact] public async Task Card_payment_is_created() { var sr = await CreateSr(); var r = await client.PostAsJsonAsync($"/service-request/{sr}/card-payments", new { currency = "GBP", amount = 10m, returnUrl = "https://example.test/return", language = "en" }); Assert.Equal(HttpStatusCode.Created, r.StatusCode); Assert.StartsWith("RC-", (await r.Content.ReadFromJsonAsync<CardPaymentResponse>())!.PaymentReference); }
+    [Fact]
+    public async Task Card_payment_does_not_modify_its_existing_service_request()
+    {
+        var sr = await CreateSr();
+
+        using (var beforeScope = factory.Services.CreateScope())
+        {
+            var database = beforeScope.ServiceProvider.GetRequiredService<PaymentDbContext>();
+            var serviceRequest = await database.ServiceRequests.AsNoTracking().SingleAsync(x => x.Reference == sr);
+            serviceRequest.CallbackUrl = "https://stale.example.test/callback";
+            database.ServiceRequests.Update(serviceRequest);
+            await database.SaveChangesAsync();
+        }
+
+        var response = await client.PostAsJsonAsync($"/service-request/{sr}/card-payments", new
+        {
+            currency = "GBP",
+            amount = 10m,
+            returnUrl = "https://example.test/return"
+        });
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        using var afterScope = factory.Services.CreateScope();
+        var saved = await afterScope.ServiceProvider.GetRequiredService<PaymentDbContext>()
+            .ServiceRequests.AsNoTracking().SingleAsync(x => x.Reference == sr);
+        Assert.Equal("https://stale.example.test/callback", saved.CallbackUrl);
+    }
     [Fact] public async Task Wrong_amount_is_rejected() { var sr = await CreateSr(); var r = await client.PostAsJsonAsync($"/service-request/{sr}/card-payments", new { currency = "GBP", amount = 11m, returnUrl = "https://example.test/return" }); Assert.Equal(HttpStatusCode.BadRequest, r.StatusCode); }
     [Fact] public async Task Unsupported_currency_is_rejected() { var sr = await CreateSr(); var r = await client.PostAsJsonAsync($"/service-request/{sr}/card-payments", new { currency = "EUR", amount = 10m, returnUrl = "https://example.test/return" }); Assert.Equal(HttpStatusCode.BadRequest, r.StatusCode); }
     [Fact] public async Task Duplicate_active_payment_is_idempotent() { var sr = await CreateSr(); var body = new { currency = "GBP", amount = 10m, returnUrl = "https://example.test/return" }; var a = await client.PostAsJsonAsync($"/service-request/{sr}/card-payments", body); var b = await client.PostAsJsonAsync($"/service-request/{sr}/card-payments", body); Assert.Equal((await a.Content.ReadFromJsonAsync<CardPaymentResponse>())!.PaymentReference, (await b.Content.ReadFromJsonAsync<CardPaymentResponse>())!.PaymentReference); }

@@ -54,14 +54,39 @@ public sealed class PaymentService(PaymentDbContext db, IPaymentProvider provide
     }
     public async Task<(PaymentEntity? Payment, string? Error)> CreatePayment(string serviceReference, CreateCardPayment request, CancellationToken ct)
     {
-        var sr = await db.ServiceRequests.Include(x => x.Fees).Include(x => x.Payments).SingleOrDefaultAsync(x => x.Reference == serviceReference, ct);
+        // The service request is only used to validate and associate the payment. Keeping
+        // the existing aggregate out of the change tracker ensures SaveChanges only
+        // inserts the new payment and its history; it must never try to update an existing
+        // service request (which can surface as a false optimistic-concurrency failure).
+        var sr = await db.ServiceRequests
+            .AsNoTracking()
+            .Include(x => x.Fees)
+            .SingleOrDefaultAsync(x => x.Reference == serviceReference, ct);
         if (sr is null) return (null, "Service request not found");
         if (sr.Fees.Sum(x => x.Amount) != request.Amount) return (null, "Payment amount must equal the service request fee total");
-        var existing = sr.Payments.FirstOrDefault(x => x.Amount == request.Amount && x.Currency == request.Currency && x.Status is "Initiated" or "Success");
+        var existing = await db.Payments
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x =>
+                x.ServiceRequestEntityId == sr.Id &&
+                x.Amount == request.Amount &&
+                x.Currency == request.Currency &&
+                (x.Status == "Initiated" || x.Status == "Success"), ct);
         if (existing is not null) return (existing, null);
         var now = DateTimeOffset.UtcNow;
-        var payment = new PaymentEntity { Id = Guid.NewGuid(), Reference = Reference("RC", now), Amount = request.Amount, Currency = request.Currency, ReturnUrl = request.ReturnUrl, Created = now, History = [new() { Id = Guid.NewGuid(), Status = "Initiated", Created = now }] };
-        sr.Payments.Add(payment); await db.SaveChangesAsync(ct); return (payment, null);
+        var payment = new PaymentEntity
+        {
+            Id = Guid.NewGuid(),
+            ServiceRequestEntityId = sr.Id,
+            Reference = Reference("RC", now),
+            Amount = request.Amount,
+            Currency = request.Currency,
+            ReturnUrl = request.ReturnUrl,
+            Created = now,
+            History = [new() { Id = Guid.NewGuid(), Status = "Initiated", Created = now }]
+        };
+        db.Payments.Add(payment);
+        await db.SaveChangesAsync(ct);
+        return (payment, null);
     }
     public CardPaymentResponse Response(PaymentEntity p) => new(p.Reference, p.Status, provider.GetCheckoutUrl(p.Reference));
     public async Task<PaymentEntity?> Transition(string reference, string target, CancellationToken ct)
