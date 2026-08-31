@@ -4,21 +4,31 @@ using System.Text.Json.Serialization;
 namespace PaymentApi;
 
 public sealed record CreateServiceRequest(
-    [property: Required, JsonPropertyName("callBackUrl")] string CallBackUrl,
+    [param: Required]
+    [property: JsonPropertyName("callBackUrl")] string CallBackUrl,
     [property: JsonPropertyName("caseReference")] string? CaseReference,
-    [property: Required, JsonPropertyName("ccdCaseNumber")] string CcdCaseNumber,
-    [property: Required, MinLength(1), JsonPropertyName("fees")] IReadOnlyList<CreateFee> Fees);
+    [param: Required]
+    [property: JsonPropertyName("ccdCaseNumber")] string CcdCaseNumber,
+    [param: Required, MinLength(1)]
+    [property: JsonPropertyName("fees")] IReadOnlyList<CreateFee> Fees);
 
 public sealed record CreateFee(
-    [property: Required, JsonPropertyName("code")] string Code,
-    [property: Required, JsonPropertyName("version")] string Version,
-    [property: Range(typeof(decimal), "0.01", "999999999"), JsonPropertyName("calculatedAmount")] decimal CalculatedAmount);
+    [param: Required]
+    [property: JsonPropertyName("code")] string Code,
+    [param: Required]
+    [property: JsonPropertyName("version")] string Version,
+    [param: Range(typeof(decimal), "0.01", "999999999")]
+    [property: JsonPropertyName("calculatedAmount")] decimal CalculatedAmount);
 
 public sealed record CreateCardPayment(
-    [property: Required, RegularExpression("GBP"), JsonPropertyName("currency")] string Currency,
-    [property: Range(typeof(decimal), "0.01", "999999999"), JsonPropertyName("amount")] decimal Amount,
-    [property: Required, Url, JsonPropertyName("returnUrl")] string ReturnUrl,
-    [property: RegularExpression("en|cy"), JsonPropertyName("language")] string? Language);
+    [param: Required, RegularExpression("GBP")]
+    [property: JsonPropertyName("currency")] string Currency,
+    [param: Range(typeof(decimal), "0.01", "999999999")]
+    [property: JsonPropertyName("amount")] decimal Amount,
+    [param: Required, Url]
+    [property: JsonPropertyName("returnUrl")] string ReturnUrl,
+    [param: RegularExpression("en|cy")]
+    [property: JsonPropertyName("language")] string? Language);
 
 public sealed record FeeResponse(
     [property: JsonPropertyName("code")] string Code,
