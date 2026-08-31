@@ -13,6 +13,65 @@ application also exposes the read-only JSON routes `GET /payments` and
 Create a service request from `/service-requests/new`. The form supports one or
 more fees and submits them to the `POST /service-request` API.
 
+## Creating a service request through the API
+
+`GET /payments` is a read-only endpoint and does not prove that the database is
+writable. `POST /service-request` requires a JSON body and, when
+`Auth__Mode=Mock`, both authentication headers. For example:
+
+```sh
+curl --fail-with-body -i http://localhost:5080/service-request \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer local-test' \
+  -H 'ServiceAuthorization: local-test' \
+  --data '{
+    "callBackUrl": "https://example.test/payment-status",
+    "caseReference": "case-123",
+    "ccdCaseNumber": "1234567890123456",
+    "fees": [
+      { "code": "FEE0001", "version": "1", "calculatedAmount": 10.00 }
+    ]
+  }'
+```
+
+The expected response is `201 Created`. A `400` response means the JSON failed
+request validation, and `401` means the headers required by mock authentication
+are absent. A `500` is not an authentication or payload-validation response; it
+usually means that the configured database cannot execute the lookup or insert.
+Check the application log for the underlying PostgreSQL error, verify that
+`ConnectionStrings__PaymentDb` points to the intended writable database, and
+apply the migration with:
+
+```sh
+dotnet ef database update --project src/PaymentApi
+```
+
+Run the migration against the same connection string and environment used by
+the deployed application. In hosted environments this should normally be a
+one-off deployment job rather than an operation performed on every application
+startup.
+
+The controller has ASP.NET Core's `[ApiController]` behavior enabled. Body
+deserialization, content-type checks, and data-annotation validation therefore
+happen **before** `CreateServiceRequest` is invoked. If a breakpoint at the
+start of that method is not reached, inspect the raw HTTP status and response
+body first:
+
+* `400 application/problem+json` means the JSON could not be deserialized or a
+  required value/fee failed validation. The `errors` object identifies the
+  rejected field.
+* `415 Unsupported Media Type` means the request was not sent with
+  `Content-Type: application/json`.
+* `401` can only be returned from inside this action, so reaching it confirms
+  that binding and automatic validation completed.
+* The generic `500` JSON response is produced by the exception handler. Check
+  the server log for that request; an exception raised before action invocation
+  cannot be diagnosed from the intentionally generic public response.
+
+When debugging, use `curl -i` (as above), the browser Network panel, or disable
+the client's "throw on non-success" behavior so the actual status and Problem
+Details response are not replaced by a generic client-side error.
+
 ## Local PostgreSQL
 
 1. Install .NET 8 and PostgreSQL 14 or newer.

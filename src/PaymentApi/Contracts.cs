@@ -3,22 +3,50 @@ using System.Text.Json.Serialization;
 
 namespace PaymentApi;
 
-public sealed record CreateServiceRequest(
-    [property: Required, JsonPropertyName("callBackUrl")] string CallBackUrl,
-    [property: JsonPropertyName("caseReference")] string? CaseReference,
-    [property: Required, JsonPropertyName("ccdCaseNumber")] string CcdCaseNumber,
-    [property: Required, MinLength(1), JsonPropertyName("fees")] IReadOnlyList<CreateFee> Fees);
+// Request DTOs use property-based classes so MVC reads validation and JSON
+// metadata from one unambiguous location. Positional records split that metadata
+// between constructor parameters and generated properties.
+public sealed class CreateServiceRequest
+{
+    [Required, JsonPropertyName("callBackUrl")]
+    public string CallBackUrl { get; init; } = null!;
 
-public sealed record CreateFee(
-    [property: Required, JsonPropertyName("code")] string Code,
-    [property: Required, JsonPropertyName("version")] string Version,
-    [property: Range(typeof(decimal), "0.01", "999999999"), JsonPropertyName("calculatedAmount")] decimal CalculatedAmount);
+    [JsonPropertyName("caseReference")]
+    public string? CaseReference { get; init; }
 
-public sealed record CreateCardPayment(
-    [property: Required, RegularExpression("GBP"), JsonPropertyName("currency")] string Currency,
-    [property: Range(typeof(decimal), "0.01", "999999999"), JsonPropertyName("amount")] decimal Amount,
-    [property: Required, Url, JsonPropertyName("returnUrl")] string ReturnUrl,
-    [property: RegularExpression("en|cy"), JsonPropertyName("language")] string? Language);
+    [Required, JsonPropertyName("ccdCaseNumber")]
+    public string CcdCaseNumber { get; init; } = null!;
+
+    [Required, MinLength(1), JsonPropertyName("fees")]
+    public IReadOnlyList<CreateFee> Fees { get; init; } = null!;
+}
+
+public sealed class CreateFee
+{
+    [Required, JsonPropertyName("code")]
+    public string Code { get; init; } = null!;
+
+    [Required, JsonPropertyName("version")]
+    public string Version { get; init; } = null!;
+
+    [Range(typeof(decimal), "0.01", "999999999"), JsonPropertyName("calculatedAmount")]
+    public decimal CalculatedAmount { get; init; }
+}
+
+public sealed class CreateCardPayment
+{
+    [Required, RegularExpression("GBP"), JsonPropertyName("currency")]
+    public string Currency { get; init; } = null!;
+
+    [Range(typeof(decimal), "0.01", "999999999"), JsonPropertyName("amount")]
+    public decimal Amount { get; init; }
+
+    [Required, Url, JsonPropertyName("returnUrl")]
+    public string ReturnUrl { get; init; } = null!;
+
+    [RegularExpression("en|cy"), JsonPropertyName("language")]
+    public string? Language { get; init; }
+}
 
 public sealed record FeeResponse(
     [property: JsonPropertyName("code")] string Code,
