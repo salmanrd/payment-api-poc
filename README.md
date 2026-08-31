@@ -18,7 +18,20 @@ more fees and submits them to the `POST /service-request` API.
 1. Install .NET 8 and PostgreSQL 14 or newer.
 2. Copy `.env.example` to `.env`, replace the password, and export the variables.
 3. Create the database, then run `dotnet ef database update --project src/PaymentApi`.
-4. Run `dotnet run --project src/PaymentApi`; it listens on `$PORT` (8080 by default).
+4. Run `dotnet run --project src/PaymentApi`; the local launch profile listens on
+   `http://localhost:5080`.
+
+For local runs, set `ASPNETCORE_URLS` to choose another address. In hosted
+environments, setting `PORT` binds the application to `0.0.0.0:$PORT` (the
+container sets it to `8080`). If startup reports that an address is already in
+use, either stop the process using that port or select a free local port, for
+example:
+
+```sh
+ASPNETCORE_URLS=http://localhost:5081 \
+PublicBaseUrl=http://localhost:5081 \
+dotnet run --project src/PaymentApi --no-launch-profile
+```
 
 `Auth__Mode=None` disables header checks. `Mock` requires non-empty
 `Authorization` and `ServiceAuthorization` headers. Only
