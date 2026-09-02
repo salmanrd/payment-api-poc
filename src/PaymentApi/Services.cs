@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace PaymentApi;
 
@@ -45,13 +46,82 @@ public sealed class PaymentService(PaymentDbContext db, IPaymentProvider provide
 {
     public async Task<ServiceRequestEntity> CreateServiceRequest(CreateServiceRequest request, CancellationToken ct)
     {
-        var existing = await db.ServiceRequests.Include(x => x.Fees).SingleOrDefaultAsync(x => x.CcdCaseNumber == request.CcdCaseNumber, ct);
-        if (existing is not null) return existing;
         var now = DateTimeOffset.UtcNow;
         var entity = new ServiceRequestEntity { Id = Guid.NewGuid(), Reference = Reference("SR", now), CallbackUrl = request.CallBackUrl, CaseReference = request.CaseReference, CcdCaseNumber = request.CcdCaseNumber, Created = now,
             Fees = request.Fees.Select(x => new FeeEntity { Id = Guid.NewGuid(), Code = x.Code, Version = x.Version, Amount = x.CalculatedAmount }).ToList() };
         db.Add(entity); await db.SaveChangesAsync(ct); return entity;
     }
+    public async Task<LegacyImportResult> CreateLegacyServiceRequest(CreateLegacyServiceRequest request, CancellationToken ct)
+    {
+        var existing = await db.LegacyServiceRequestDetails.AsNoTracking()
+            .Include(x => x.ServiceRequest).ThenInclude(x => x.Fees)
+            .SingleOrDefaultAsync(x => x.LegacySystem == request.LegacySystem && x.TransactionId == request.TransactionId, ct);
+        if (existing is not null)
+            return Matches(existing.ServiceRequest, request)
+                ? new(existing.ServiceRequest, null, false)
+                : new(null, "A materially different service request has already been imported for this legacy transaction", false);
+
+        var archive = await db.ArchivedTransactions.AsNoTracking().SingleOrDefaultAsync(
+            x => x.LegacySystem == request.LegacySystem && x.TransactionId == request.TransactionId, ct);
+        if (archive is null) return new(null, "Archived transaction not found", false);
+        if (!string.Equals(archive.TransactionType, "Fee", StringComparison.OrdinalIgnoreCase))
+            return new(null, "Archived transaction must have transaction type Fee", false);
+        if ((archive.CcdCaseNumber is not null && archive.CcdCaseNumber != request.CcdCaseNumber) ||
+            (archive.CaseReference is not null && archive.CaseReference != request.CaseReference) ||
+            (archive.FeeTotal.HasValue && archive.FeeTotal.Value != request.Fees.Sum(x => x.CalculatedAmount)))
+            return new(null, "The requested case identifiers or fee total do not match the archived transaction", false);
+
+        IDbContextTransaction? transaction = db.Database.IsRelational()
+            ? await db.Database.BeginTransactionAsync(ct) : null;
+        try
+        {
+            var now = DateTimeOffset.UtcNow;
+            var entity = new ServiceRequestEntity
+            {
+                Id = Guid.NewGuid(), Reference = Reference("SR", now), CallbackUrl = request.CallBackUrl,
+                CaseReference = request.CaseReference, CcdCaseNumber = request.CcdCaseNumber, Created = now,
+                Fees = request.Fees.Select(x => new FeeEntity { Id = Guid.NewGuid(), Code = x.Code, Version = x.Version, Amount = x.CalculatedAmount }).ToList(),
+                LegacyDetails = new LegacyServiceRequestDetailsEntity
+                {
+                    Id = Guid.NewGuid(), LegacySystem = request.LegacySystem,
+                    TransactionId = request.TransactionId, ImportedAt = now
+                }
+            };
+            db.ServiceRequests.Add(entity);
+            await db.SaveChangesAsync(ct);
+            if (transaction is not null) await transaction.CommitAsync(ct);
+            return new(entity, null, true);
+        }
+        catch (DbUpdateException) when (transaction is not null)
+        {
+            // The database uniqueness constraint arbitrates simultaneous imports.
+            // Read the winner after rolling back this insert and apply normal retry semantics.
+            await transaction.RollbackAsync(ct);
+            await transaction.DisposeAsync();
+            transaction = null;
+            db.ChangeTracker.Clear();
+            var winner = await db.LegacyServiceRequestDetails.AsNoTracking()
+                .Include(x => x.ServiceRequest).ThenInclude(x => x.Fees)
+                .SingleOrDefaultAsync(x => x.LegacySystem == request.LegacySystem && x.TransactionId == request.TransactionId, ct);
+            if (winner is null) throw;
+            return Matches(winner.ServiceRequest, request)
+                ? new(winner.ServiceRequest, null, false)
+                : new(null, "A materially different service request has already been imported for this legacy transaction", false);
+        }
+        finally
+        {
+            if (transaction is not null) await transaction.DisposeAsync();
+        }
+    }
+
+    private static bool Matches(ServiceRequestEntity existing, CreateLegacyServiceRequest request) =>
+        existing.CcdCaseNumber == request.CcdCaseNumber &&
+        existing.CaseReference == request.CaseReference &&
+        existing.CallbackUrl == request.CallBackUrl &&
+        existing.Fees.OrderBy(x => x.Code).ThenBy(x => x.Version).ThenBy(x => x.Amount)
+            .Select(x => (x.Code, x.Version, x.Amount))
+            .SequenceEqual(request.Fees.OrderBy(x => x.Code).ThenBy(x => x.Version).ThenBy(x => x.CalculatedAmount)
+                .Select(x => (x.Code, x.Version, x.CalculatedAmount)));
     public async Task<(PaymentEntity? Payment, string? Error)> CreatePayment(string serviceReference, CreateCardPayment request, CancellationToken ct)
     {
         // The service request is only used to validate and associate the payment. Keeping
@@ -101,3 +171,5 @@ public sealed class PaymentService(PaymentDbContext db, IPaymentProvider provide
     }
     private static string Reference(string prefix, DateTimeOffset now) => $"{prefix}-{now:yyyyMMdd}-{Random.Shared.NextInt64(0, 10_000_000_000):D10}";
 }
+
+public sealed record LegacyImportResult(ServiceRequestEntity? ServiceRequest, string? Error, bool Created);
