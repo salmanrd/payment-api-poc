@@ -4,3 +4,12 @@ obj/
 .idea/
 .vs/
 TestResults/
+
+# Terraform local state and per-environment values
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+!*.tfvars.example
+crash.log
