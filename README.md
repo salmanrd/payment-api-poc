@@ -115,15 +115,94 @@ docker run --rm -p 8080:8080 --env-file .env payment-api
 For a database on the host, use `host.docker.internal` (Docker Desktop) as the
 connection host. On Linux, attach both containers to one Docker network.
 
-## Cloud Run and Cloud SQL
+## Deploying the web app to Google Cloud with Terraform
 
-Build and deploy the image, attach the Cloud SQL PostgreSQL instance, and store
-the database password in Secret Manager. Set `ConnectionStrings__PaymentDb` to
-the Cloud SQL private-IP endpoint (or connector endpoint), `PublicBaseUrl` to the
-Cloud Run service URL, `Auth__Mode`, and `PaymentProvider__Type=Fake`. Cloud Run
-injects `PORT`; the application binds to `0.0.0.0:$PORT`. Run migrations as a
-Cloud Run Job before shifting traffic. Keep minimum instances at zero for a POC,
-but use connection pooling and an appropriate maximum pool size in production.
+The configuration in [`terraform/`](terraform/) deploys only the web app to a
+Cloud Run service in the UK (`europe-west2`, London). The region is fixed in the
+configuration so an environment-specific variable cannot accidentally move the
+service or its Artifact Registry repository outside the UK. PostgreSQL remains
+in Supabase. Terraform creates the repository and a dedicated runtime service
+account, then gives that identity access to one existing Secret Manager secret.
+It does not put the database credential in Terraform configuration or state.
+
+Prerequisites are Terraform 1.6+, the Google Cloud CLI, a GCP project with
+billing enabled, and permission to enable APIs and manage Cloud Run, Artifact
+Registry, service accounts, and secret IAM. Authenticate Application Default
+Credentials and select the project:
+
+```sh
+gcloud auth application-default login
+gcloud config set project MY_PROJECT
+```
+
+Create the secret before applying Terraform. Its value must be the **complete**
+Supabase connection string, including TLS options. Do not pass only a password:
+
+```sh
+printf '%s' 'Host=...;Port=5432;Database=postgres;Username=...;Password=...;SSL Mode=Require;Trust Server Certificate=true' \
+  | gcloud secrets create payment-db-connection-string \
+      --replication-policy=automatic --data-file=-
+```
+
+Build the image and push it to the repository path that Terraform will create.
+On the first deployment, create just the repository before pushing, then apply
+the complete configuration:
+
+```sh
+cp terraform/terraform.tfvars.example terraform/terraform.tfvars
+# Edit terraform.tfvars, especially project_id, container_image, and public_base_url.
+terraform -chdir=terraform init
+terraform -chdir=terraform apply -target=google_artifact_registry_repository.app
+gcloud auth configure-docker europe-west2-docker.pkg.dev
+docker build -t europe-west2-docker.pkg.dev/MY_PROJECT/payment-api/payment-api:TAG .
+docker push europe-west2-docker.pkg.dev/MY_PROJECT/payment-api/payment-api:TAG
+terraform -chdir=terraform apply
+```
+
+Cloud Run resolves the selected secret version directly into
+`ConnectionStrings__PaymentDb` at container startup; the application already
+reads that standard ASP.NET Core configuration key. The runtime identity has
+access only to the selected database secret. Prefer an immutable image digest
+and a numeric `database_secret_version` for reproducible production deploys.
+
+`public_base_url` must be the external HTTPS origin used in generated checkout
+links. If using the default Cloud Run URL for the first deployment, apply once
+with a temporary HTTPS origin, copy `service_url` from the Terraform output into
+`public_base_url`, and apply again. A custom domain avoids that bootstrap step.
+
+Apply EF Core migrations to Supabase as a separate, one-off release step before
+sending traffic to a schema-dependent version; the web service deliberately
+does not migrate the shared database on startup.
+
+### Releasing subsequent application changes
+
+After the first deployment is complete, the release script builds the current
+Git commit with Cloud Build, pushes it to the London Artifact Registry, and
+deploys that exact image with Terraform:
+
+```sh
+./scripts/release-gcp.sh
+```
+
+The script requires a clean Git working tree, an existing
+`terraform/terraform.tfvars`, authenticated `gcloud` and Terraform access, and
+the Artifact Registry repository from the first-deployment bootstrap. It uses
+the configured `gcloud` project by default. To select one explicitly:
+
+```sh
+GCP_PROJECT_ID=MY_PROJECT ./scripts/release-gcp.sh
+```
+
+Every release uses the full Git commit SHA as its container tag. An explicit
+tag can be supplied as the first argument when necessary:
+
+```sh
+./scripts/release-gcp.sh release-2026-09-02
+```
+
+Run any required EF Core migrations against Supabase before invoking the
+script. The script deliberately never reads the database credential or runs
+migrations from the operator's machine.
 
 ## Test checkout and callbacks
 
