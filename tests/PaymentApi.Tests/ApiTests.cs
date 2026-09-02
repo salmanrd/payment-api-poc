@@ -24,7 +24,43 @@ public sealed class ApiTests(Factory factory) : IClassFixture<Factory>
     private async Task<string> CreateSr(string? ccd = null) { var r = await client.PostAsJsonAsync("/service-request", Sr(ccd ?? Random.Shared.NextInt64(1_000_000_000_000_000, 9_999_999_999_999_999).ToString())); return (await r.Content.ReadFromJsonAsync<ServiceRequestResponse>())!.ServiceRequestReference; }
     [Fact] public async Task Health_is_up() => Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/health")).StatusCode);
     [Fact] public async Task Service_request_is_created() { var r = await client.PostAsJsonAsync("/service-request", Sr()); Assert.Equal(HttpStatusCode.Created, r.StatusCode); Assert.StartsWith("SR-", (await r.Content.ReadFromJsonAsync<ServiceRequestResponse>())!.ServiceRequestReference); }
-    [Fact] public async Task Service_request_is_idempotent_by_ccd_case() { var ccd = Random.Shared.NextInt64().ToString(); var a = await client.PostAsJsonAsync("/service-request", Sr(ccd)); var b = await client.PostAsJsonAsync("/service-request", Sr(ccd)); Assert.Equal((await a.Content.ReadFromJsonAsync<ServiceRequestResponse>())!.ServiceRequestReference, (await b.Content.ReadFromJsonAsync<ServiceRequestResponse>())!.ServiceRequestReference); }
+    [Fact] public async Task Multiple_service_requests_can_use_the_same_ccd_case() { var ccd = Random.Shared.NextInt64().ToString(); var a = await client.PostAsJsonAsync("/service-request", Sr(ccd)); var b = await client.PostAsJsonAsync("/service-request", Sr(ccd)); Assert.NotEqual((await a.Content.ReadFromJsonAsync<ServiceRequestResponse>())!.ServiceRequestReference, (await b.Content.ReadFromJsonAsync<ServiceRequestResponse>())!.ServiceRequestReference); }
+    [Fact]
+    public async Task Legacy_service_request_is_validated_and_idempotent()
+    {
+        var transactionId = Guid.NewGuid().ToString();
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<PaymentDbContext>();
+            db.ArchivedTransactions.Add(new ArchivedTransactionEntity { Id = Guid.NewGuid(), LegacySystem = "fees-v1", TransactionId = transactionId, TransactionType = "Fee", CcdCaseNumber = "123", CaseReference = "case", FeeTotal = 10m });
+            await db.SaveChangesAsync();
+        }
+        var body = new { legacySystem = "fees-v1", transactionId, callBackUrl = "https://example.test/callback", caseReference = "case", ccdCaseNumber = "123", fees = new[] { new { code = "FEE1", version = "1", calculatedAmount = 10m } } };
+        var first = await client.PostAsJsonAsync("/legacy-service-request", body);
+        var retry = await client.PostAsJsonAsync("/legacy-service-request", body);
+        Assert.Equal(HttpStatusCode.Created, first.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, retry.StatusCode);
+        Assert.Equal((await first.Content.ReadFromJsonAsync<LegacyServiceRequestResponse>())!.ServiceRequestReference,
+            (await retry.Content.ReadFromJsonAsync<LegacyServiceRequestResponse>())!.ServiceRequestReference);
+        using var checkScope = factory.Services.CreateScope();
+        var details = await checkScope.ServiceProvider.GetRequiredService<PaymentDbContext>().LegacyServiceRequestDetails.SingleAsync(x => x.TransactionId == transactionId);
+        Assert.Equal("fees-v1", details.LegacySystem);
+    }
+    [Fact]
+    public async Task Changed_legacy_retry_conflicts()
+    {
+        var transactionId = Guid.NewGuid().ToString();
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<PaymentDbContext>();
+            db.ArchivedTransactions.Add(new ArchivedTransactionEntity { Id = Guid.NewGuid(), LegacySystem = "fees-v1", TransactionId = transactionId, TransactionType = "Fee" });
+            await db.SaveChangesAsync();
+        }
+        var original = new { legacySystem = "fees-v1", transactionId, callBackUrl = "https://example.test/one", ccdCaseNumber = "123", fees = new[] { new { code = "FEE1", version = "1", calculatedAmount = 10m } } };
+        var changed = new { legacySystem = "fees-v1", transactionId, callBackUrl = "https://example.test/two", ccdCaseNumber = "123", fees = new[] { new { code = "FEE1", version = "1", calculatedAmount = 10m } } };
+        Assert.Equal(HttpStatusCode.Created, (await client.PostAsJsonAsync("/legacy-service-request", original)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await client.PostAsJsonAsync("/legacy-service-request", changed)).StatusCode);
+    }
     [Fact] public async Task Invalid_service_request_is_rejected() { var r = await client.PostAsJsonAsync("/service-request", new { callBackUrl = "x", ccdCaseNumber = "", fees = Array.Empty<object>() }); Assert.Equal(HttpStatusCode.BadRequest, r.StatusCode); }
     [Fact] public async Task Service_request_requires_at_least_one_fee() { var r = await client.PostAsJsonAsync("/service-request", new { callBackUrl = "https://example.test/callback", ccdCaseNumber = "1234567890123456", fees = Array.Empty<object>() }); Assert.Equal(HttpStatusCode.BadRequest, r.StatusCode); }
     [Fact] public async Task Service_request_rejects_a_zero_fee() { var r = await client.PostAsJsonAsync("/service-request", new { callBackUrl = "https://example.test/callback", ccdCaseNumber = "1234567890123456", fees = new[] { new { code = "FEE0001", version = "1", calculatedAmount = 0m } } }); Assert.Equal(HttpStatusCode.BadRequest, r.StatusCode); }

@@ -21,6 +21,27 @@ public sealed class CreateServiceRequest
     public IReadOnlyList<CreateFee> Fees { get; init; } = null!;
 }
 
+public sealed class CreateLegacyServiceRequest
+{
+    [Required, JsonPropertyName("legacySystem")]
+    public string LegacySystem { get; init; } = null!;
+
+    [Required, JsonPropertyName("transactionId")]
+    public string TransactionId { get; init; } = null!;
+
+    [Required, JsonPropertyName("callBackUrl")]
+    public string CallBackUrl { get; init; } = null!;
+
+    [JsonPropertyName("caseReference")]
+    public string? CaseReference { get; init; }
+
+    [Required, JsonPropertyName("ccdCaseNumber")]
+    public string CcdCaseNumber { get; init; } = null!;
+
+    [Required, MinLength(1), JsonPropertyName("fees")]
+    public IReadOnlyList<CreateFee> Fees { get; init; } = null!;
+}
+
 public sealed class CreateFee
 {
     [Required, JsonPropertyName("code")]
@@ -54,6 +75,11 @@ public sealed record FeeResponse(
     [property: JsonPropertyName("calculatedAmount")] decimal CalculatedAmount);
 
 public sealed record ServiceRequestResponse(
+    [property: JsonPropertyName("serviceRequestReference")] string ServiceRequestReference,
+    [property: JsonPropertyName("dateCreated")] DateTimeOffset DateCreated,
+    [property: JsonPropertyName("fees")] IReadOnlyList<FeeResponse> Fees);
+
+public sealed record LegacyServiceRequestResponse(
     [property: JsonPropertyName("serviceRequestReference")] string ServiceRequestReference,
     [property: JsonPropertyName("dateCreated")] DateTimeOffset DateCreated,
     [property: JsonPropertyName("fees")] IReadOnlyList<FeeResponse> Fees);
