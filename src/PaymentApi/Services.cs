@@ -122,6 +122,87 @@ public sealed class PaymentService(PaymentDbContext db, IPaymentProvider provide
             .Select(x => (x.Code, x.Version, x.Amount))
             .SequenceEqual(request.Fees.OrderBy(x => x.Code).ThenBy(x => x.Version).ThenBy(x => x.CalculatedAmount)
                 .Select(x => (x.Code, x.Version, x.CalculatedAmount)));
+
+    public async Task<LegacyPaymentImportResult> CreateLegacyPayment(
+        string serviceReference, CreateLegacyPayment request, CancellationToken ct)
+    {
+        var existing = await db.LegacyPaymentDetails.AsNoTracking().Include(x => x.Payment).ThenInclude(x => x.ServiceRequest)
+            .SingleOrDefaultAsync(x => x.LegacySystem == request.LegacySystem && x.TransactionId == request.TransactionId, ct);
+        if (existing is not null)
+            return LegacyPaymentMatches(existing, serviceReference, request)
+                ? new(existing.Payment, null, false, false)
+                : new(null, "This archived payment transaction has already been imported with incompatible values", false, true);
+
+        var referenceOwner = await db.LegacyPaymentDetails.AsNoTracking()
+            .AnyAsync(x => x.LegacySystem == request.LegacySystem &&
+                x.LegacyPaymentReference == request.LegacyPaymentReference, ct);
+        if (referenceOwner)
+            return new(null, "This legacy payment reference has already been imported", false, true);
+
+        var serviceRequest = await db.ServiceRequests.AsNoTracking().Include(x => x.LegacyDetails)
+            .SingleOrDefaultAsync(x => x.Reference == serviceReference, ct);
+        if (serviceRequest is null) return new(null, "Service request not found", false, false);
+        if (serviceRequest.LegacyDetails is null)
+            return new(null, "Service request does not have legacy provenance", false, false);
+
+        var archive = await db.ArchivedTransactions.AsNoTracking().SingleOrDefaultAsync(
+            x => x.LegacySystem == request.LegacySystem && x.TransactionId == request.TransactionId, ct);
+        if (archive is null) return new(null, "Archived transaction not found", false, false);
+        if (!string.Equals(archive.TransactionType, "Payment", StringComparison.OrdinalIgnoreCase))
+            return new(null, "Archived transaction must have transaction type Payment", false, true);
+        if (serviceRequest.LegacyDetails.LegacySystem != request.LegacySystem ||
+            archive.FeeTransactionId != serviceRequest.LegacyDetails.TransactionId)
+            return new(null, "Archived payment does not belong to the service request's archived Fee transaction", false, true);
+        if (archive.LegacyPaymentReference != request.LegacyPaymentReference || archive.Amount != request.Amount ||
+            !string.Equals(archive.Currency, request.Currency, StringComparison.Ordinal))
+            return new(null, "Legacy payment reference, amount, or currency does not match the archived transaction", false, true);
+
+        IDbContextTransaction? transaction = db.Database.IsRelational() ? await db.Database.BeginTransactionAsync(ct) : null;
+        try
+        {
+            var now = DateTimeOffset.UtcNow;
+            var payment = new PaymentEntity
+            {
+                Id = Guid.NewGuid(), ServiceRequestEntityId = serviceRequest.Id, Reference = Reference("RC", now),
+                Amount = request.Amount, Currency = request.Currency, ReturnUrl = "", Status = "Success", Created = now,
+                History = [new() { Id = Guid.NewGuid(), Status = "Success", Created = now }],
+                LegacyDetails = new LegacyPaymentDetailsEntity
+                {
+                    Id = Guid.NewGuid(), LegacySystem = request.LegacySystem, TransactionId = request.TransactionId,
+                    LegacyPaymentReference = request.LegacyPaymentReference,
+                    ProviderTransactionId = archive.ProviderTransactionId, ImportedAt = now
+                }
+            };
+            db.Payments.Add(payment);
+            await db.SaveChangesAsync(ct);
+            if (transaction is not null) await transaction.CommitAsync(ct);
+            return new(payment, null, true, false);
+        }
+        catch (DbUpdateException) when (transaction is not null)
+        {
+            await transaction.RollbackAsync(ct);
+            await transaction.DisposeAsync();
+            transaction = null;
+            db.ChangeTracker.Clear();
+            var winner = await db.LegacyPaymentDetails.AsNoTracking().Include(x => x.Payment).ThenInclude(x => x.ServiceRequest)
+                .SingleOrDefaultAsync(x => x.LegacySystem == request.LegacySystem &&
+                    (x.TransactionId == request.TransactionId || x.LegacyPaymentReference == request.LegacyPaymentReference), ct);
+            if (winner is null) throw;
+            return LegacyPaymentMatches(winner, serviceReference, request)
+                ? new(winner.Payment, null, false, false)
+                : new(null, "This archived payment transaction has already been imported with incompatible values", false, true);
+        }
+        finally
+        {
+            if (transaction is not null) await transaction.DisposeAsync();
+        }
+    }
+
+    private static bool LegacyPaymentMatches(LegacyPaymentDetailsEntity existing, string serviceReference, CreateLegacyPayment request) =>
+        existing.Payment.ServiceRequestEntityId != Guid.Empty &&
+        existing.Payment.ServiceRequest.Reference == serviceReference &&
+        existing.LegacyPaymentReference == request.LegacyPaymentReference &&
+        existing.Payment.Amount == request.Amount && existing.Payment.Currency == request.Currency;
     public async Task<(PaymentEntity? Payment, string? Error)> CreatePayment(string serviceReference, CreateCardPayment request, CancellationToken ct)
     {
         // The service request is only used to validate and associate the payment. Keeping
@@ -173,3 +254,4 @@ public sealed class PaymentService(PaymentDbContext db, IPaymentProvider provide
 }
 
 public sealed record LegacyImportResult(ServiceRequestEntity? ServiceRequest, string? Error, bool Created);
+public sealed record LegacyPaymentImportResult(PaymentEntity? Payment, string? Error, bool Created, bool Conflict);
