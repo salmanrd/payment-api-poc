@@ -198,16 +198,38 @@ public sealed class ApiTests(Factory factory) : IClassFixture<Factory>
     [Fact] public async Task Missing_payment_read_is_not_found() => Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/payments/does-not-exist")).StatusCode);
     [Fact] public async Task Payments_ui_supports_search_and_details()
     {
-        var sr = await CreateSr();
+        var ccd = Random.Shared.NextInt64(1_000_000_000_000_000, 9_999_999_999_999_999).ToString();
+        var sr = await CreateSr(ccd);
+        var secondSr = await CreateSr(ccd);
         var created = await client.PostAsJsonAsync($"/service-request/{sr}/card-payments", new { currency = "GBP", amount = 10m, returnUrl = "https://example.test/return" });
         var reference = (await created.Content.ReadFromJsonAsync<CardPaymentResponse>())!.PaymentReference;
-        var list = await client.GetAsync($"/payments-ui?search={reference}&status=Initiated");
-        var listHtml = await list.Content.ReadAsStringAsync();
+        var search = await client.GetAsync($"/payments-ui?search={reference}");
+        var casePage = await client.GetAsync(search.Headers.Location);
+        var caseHtml = await casePage.Content.ReadAsStringAsync();
         var details = await client.GetAsync($"/payments-ui/{reference}");
-        Assert.Equal(HttpStatusCode.OK, list.StatusCode);
-        Assert.Contains(reference, listHtml);
+        Assert.Equal(HttpStatusCode.Redirect, search.StatusCode);
+        Assert.Equal($"/cases/{ccd}", search.Headers.Location?.OriginalString);
+        Assert.Equal(HttpStatusCode.OK, casePage.StatusCode);
+        Assert.Contains("Total payments", caseHtml);
+        Assert.Contains("Amount due", caseHtml);
+        Assert.Contains("Service requests", caseHtml);
+        Assert.Contains("Payments", caseHtml);
+        Assert.Contains(sr, caseHtml);
+        Assert.Contains(secondSr, caseHtml);
+        Assert.Contains(reference, caseHtml);
         Assert.Equal(HttpStatusCode.OK, details.StatusCode);
         Assert.Contains("Payment details", await details.Content.ReadAsStringAsync());
+    }
+    [Fact]
+    public async Task Case_page_keeps_empty_payments_table_section_visible()
+    {
+        var ccd = Random.Shared.NextInt64(1_000_000_000_000_000, 9_999_999_999_999_999).ToString();
+        await CreateSr(ccd);
+
+        var html = await client.GetStringAsync($"/cases/{ccd}");
+
+        Assert.Contains("No payments found", html);
+        Assert.Contains("Back to search", html);
     }
     [Fact] public async Task Missing_payment_ui_is_not_found() => Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/payments-ui/does-not-exist")).StatusCode);
     [Fact] public async Task Create_service_request_ui_posts_to_api()
