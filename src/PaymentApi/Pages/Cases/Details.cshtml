@@ -1,0 +1,99 @@
+@page "/cases/{ccdCaseNumber}"
+@model PaymentApi.Pages.Cases.DetailsModel
+@{
+    ViewData["Title"] = "Case transactions";
+}
+
+<a asp-page="/Payments/Index" class="back-link">Back to search</a>
+
+<div class="case-heading">
+    <h1>Case transactions</h1>
+    <p><strong>Case reference:</strong> @Model.CcdCaseNumber</p>
+</div>
+
+@if (Model.LoadFailed)
+{
+    <div class="message message-error" role="alert">
+        <h2>Case transactions could not be loaded</h2>
+        <p>Try again later.</p>
+    </div>
+}
+else
+{
+    <section class="case-summary" aria-label="Case payment summary">
+        <div><h2>Total payments</h2><p>—</p></div>
+        <div><h2>Unallocated payments</h2><p>—</p></div>
+        <div><h2>Total remissions</h2><p>—</p></div>
+        <div><h2>Amount due</h2><p>—</p></div>
+        <div><h2>Over payment</h2><p>—</p></div>
+    </section>
+
+    <section class="transaction-section">
+        <h2>Service requests</h2>
+        @if (Model.ServiceRequests.Count == 0)
+        {
+            <div class="message"><h3>No service requests found</h3><p>There are no service requests for this case.</p></div>
+        }
+        else
+        {
+            <div class="table-scroll">
+                <table>
+                    <caption class="visually-hidden">Service requests for this case</caption>
+                    <thead><tr><th>Status</th><th>Amount</th><th>Party</th><th>Request reference</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
+                    <tbody>
+                    @foreach (var request in Model.ServiceRequests)
+                    {
+                        <tr>
+                            <td>@request.Status</td>
+                            <td>£@request.Amount.ToString("N2")</td>
+                            <td>@(request.Party ?? "—")</td>
+                            <td>@request.Reference</td>
+                            <td class="actions">
+                                <a href="#">Review</a>
+                                @if (request.Status == "Paid")
+                                {
+                                    <button type="button" class="secondary-button" disabled>Take telephony payment</button>
+                                }
+                                else
+                                {
+                                    <button type="button" class="secondary-button">Take telephony payment</button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
+        <p><a asp-page="/ServiceRequests/Create">Create service request and pay</a></p>
+    </section>
+
+    <section class="transaction-section">
+        <h2>Payments</h2>
+        @if (Model.Payments.Count == 0)
+        {
+            <div class="message"><h3>No payments found</h3><p>There are no payments for this case.</p></div>
+        }
+        else
+        {
+            <div class="table-scroll">
+                <table>
+                    <caption class="visually-hidden">Payments for this case</caption>
+                    <thead><tr><th>Status</th><th>Amount</th><th>Date allocated</th><th>Request reference</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
+                    <tbody>
+                    @foreach (var payment in Model.Payments)
+                    {
+                        <tr>
+                            <td>@payment.Status</td>
+                            <td>£@payment.Amount.ToString("N2")</td>
+                            <td><time datetime="@payment.DateAllocated.ToString("O")">@payment.DateAllocated.ToString("d MMM yyyy")</time></td>
+                            <td>@payment.ServiceRequestReference</td>
+                            <td class="actions"><a asp-page="/Payments/Details" asp-route-paymentReference="@payment.Reference">Review</a></td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+}

@@ -1,42 +1,50 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.EntityFrameworkCore;
 
 namespace PaymentApi.Pages.Payments;
 
-public sealed class IndexModel(PaymentQueryService payments, ILogger<IndexModel> logger) : PageModel
+public sealed class IndexModel(PaymentDbContext database, ILogger<IndexModel> logger) : PageModel
 {
-    public IReadOnlyList<PaymentReadResponse> Payments { get; private set; } = [];
-    public bool LoadFailed { get; private set; }
-
     [BindProperty(SupportsGet = true)]
     public string? Search { get; set; }
 
-    [BindProperty(SupportsGet = true)]
-    public string? Status { get; set; }
+    public bool SearchFailed { get; private set; }
+    public bool NoCaseFound { get; private set; }
 
-    public async Task OnGet(CancellationToken cancellationToken)
+    public async Task<IActionResult> OnGet(CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(Search)) return Page();
+
         try
         {
-            var results = await payments.GetAll(cancellationToken);
-            Payments = results
-                .Where(MatchesSearch)
-                .Where(payment => string.IsNullOrWhiteSpace(Status) ||
-                    payment.Status.Equals(Status, StringComparison.OrdinalIgnoreCase))
-                .ToList();
+            var term = Search.Trim();
+            var serviceRequests = await database.ServiceRequests
+                .AsNoTracking()
+                .Include(serviceRequest => serviceRequest.Payments)
+                .ToListAsync(cancellationToken);
+            var ccdCaseNumber = serviceRequests.FirstOrDefault(serviceRequest =>
+                Matches(serviceRequest.Reference, term) ||
+                Matches(serviceRequest.CaseReference, term) ||
+                Matches(serviceRequest.CcdCaseNumber, term) ||
+                serviceRequest.Payments.Any(payment => Matches(payment.Reference, term)))?.CcdCaseNumber;
+
+            if (ccdCaseNumber is null)
+            {
+                NoCaseFound = true;
+                return Page();
+            }
+
+            return RedirectToPage("/Cases/Details", new { ccdCaseNumber });
         }
         catch (Exception exception)
         {
-            logger.LogError(exception, "Unable to load payments for the UI");
-            LoadFailed = true;
+            logger.LogError(exception, "Unable to search for case {Search}", Search);
+            SearchFailed = true;
+            return Page();
         }
     }
 
-    private bool MatchesSearch(PaymentReadResponse payment)
-    {
-        if (string.IsNullOrWhiteSpace(Search)) return true;
-        return new[] { payment.PaymentReference, payment.ServiceRequestReference,
-                payment.CaseReference, payment.CcdCaseNumber }
-            .Any(value => value?.Contains(Search.Trim(), StringComparison.OrdinalIgnoreCase) is true);
-    }
+    private static bool Matches(string? value, string term) =>
+        value?.Contains(term, StringComparison.OrdinalIgnoreCase) is true;
 }
