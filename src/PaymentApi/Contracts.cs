@@ -69,6 +69,24 @@ public sealed class CreateCardPayment
     public string? Language { get; init; }
 }
 
+public sealed class CreateLegacyPayment
+{
+    [Required, JsonPropertyName("legacySystem")]
+    public string LegacySystem { get; init; } = null!;
+
+    [Required, JsonPropertyName("transactionId")]
+    public string TransactionId { get; init; } = null!;
+
+    [Required, JsonPropertyName("legacyPaymentReference")]
+    public string LegacyPaymentReference { get; init; } = null!;
+
+    [Required, JsonPropertyName("currency")]
+    public string Currency { get; init; } = null!;
+
+    [Range(typeof(decimal), "0.01", "999999999"), JsonPropertyName("amount")]
+    public decimal Amount { get; init; }
+}
+
 public sealed record FeeResponse(
     [property: JsonPropertyName("code")] string Code,
     [property: JsonPropertyName("version")] string Version,
@@ -88,6 +106,10 @@ public sealed record CardPaymentResponse(
     [property: JsonPropertyName("paymentReference")] string PaymentReference,
     [property: JsonPropertyName("status")] string Status,
     [property: JsonPropertyName("nextUrl")] string NextUrl);
+
+public sealed record LegacyPaymentResponse(
+    [property: JsonPropertyName("paymentReference")] string PaymentReference,
+    [property: JsonPropertyName("status")] string Status);
 
 public sealed record PaymentReadResponse(
     [property: JsonPropertyName("paymentReference")] string PaymentReference,
