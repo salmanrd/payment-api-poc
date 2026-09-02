@@ -174,6 +174,36 @@ Apply EF Core migrations to Supabase as a separate, one-off release step before
 sending traffic to a schema-dependent version; the web service deliberately
 does not migrate the shared database on startup.
 
+### Releasing subsequent application changes
+
+After the first deployment is complete, the release script builds the current
+Git commit with Cloud Build, pushes it to the London Artifact Registry, and
+deploys that exact image with Terraform:
+
+```sh
+./scripts/release-gcp.sh
+```
+
+The script requires a clean Git working tree, an existing
+`terraform/terraform.tfvars`, authenticated `gcloud` and Terraform access, and
+the Artifact Registry repository from the first-deployment bootstrap. It uses
+the configured `gcloud` project by default. To select one explicitly:
+
+```sh
+GCP_PROJECT_ID=MY_PROJECT ./scripts/release-gcp.sh
+```
+
+Every release uses the full Git commit SHA as its container tag. An explicit
+tag can be supplied as the first argument when necessary:
+
+```sh
+./scripts/release-gcp.sh release-2026-09-02
+```
+
+Run any required EF Core migrations against Supabase before invoking the
+script. The script deliberately never reads the database credential or runs
+migrations from the operator's machine.
+
 ## Test checkout and callbacks
 
 Open the `nextUrl` from the card-payment response and choose success, failure,
