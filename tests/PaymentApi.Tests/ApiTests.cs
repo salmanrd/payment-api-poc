@@ -218,7 +218,9 @@ public sealed class ApiTests(Factory factory) : IClassFixture<Factory>
         Assert.Contains(secondSr, caseHtml);
         Assert.Contains(reference, caseHtml);
         Assert.Equal(HttpStatusCode.OK, details.StatusCode);
-        Assert.Contains("Payment details", await details.Content.ReadAsStringAsync());
+        var detailsHtml = await details.Content.ReadAsStringAsync();
+        Assert.Contains("Payment details", detailsHtml);
+        Assert.Contains($"href=\"/cases/{ccd}\"", detailsHtml);
     }
     [Fact]
     public async Task Case_page_keeps_empty_payments_table_section_visible()

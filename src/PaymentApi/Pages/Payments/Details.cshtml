@@ -4,7 +4,14 @@
     ViewData["Title"] = "Payment details";
 }
 
-<a asp-page="/Payments/Index" class="back-link">Back to payments</a>
+@if (Model.Payment is not null)
+{
+    <a asp-page="/Cases/Details" asp-route-ccdCaseNumber="@Model.Payment.CcdCaseNumber" class="back-link">Back to payments</a>
+}
+else
+{
+    <a asp-page="/Payments/Index" class="back-link">Back to payments</a>
+}
 <h1>Payment details</h1>
 
 @if (Model.LoadFailed)
