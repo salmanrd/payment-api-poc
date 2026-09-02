@@ -11,6 +11,7 @@ public sealed class PaymentDbContext(DbContextOptions<PaymentDbContext> options)
     public DbSet<ArchivedTransactionEntity> ArchivedTransactions => Set<ArchivedTransactionEntity>();
     public DbSet<LegacyServiceRequestDetailsEntity> LegacyServiceRequestDetails => Set<LegacyServiceRequestDetailsEntity>();
     public DbSet<LegacyPaymentDetailsEntity> LegacyPaymentDetails => Set<LegacyPaymentDetailsEntity>();
+    public DbSet<TransactionEntity> Transactions => Set<TransactionEntity>();
     protected override void OnModelCreating(ModelBuilder b)
     {
         b.Entity<ServiceRequestEntity>().HasIndex(x => x.Reference).IsUnique();
@@ -18,6 +19,8 @@ public sealed class PaymentDbContext(DbContextOptions<PaymentDbContext> options)
         b.Entity<PaymentEntity>().HasIndex(x => x.Reference).IsUnique();
         b.Entity<FeeEntity>().Property(x => x.Amount).HasPrecision(12, 2);
         b.Entity<PaymentEntity>().Property(x => x.Amount).HasPrecision(12, 2);
+        b.Entity<TransactionEntity>().HasKey(x => x.TransactionId);
+        b.Entity<TransactionEntity>().Property(x => x.Amount).HasPrecision(12, 2);
         b.Entity<ArchivedTransactionEntity>().Property(x => x.FeeTotal).HasPrecision(12, 2);
         b.Entity<ArchivedTransactionEntity>().Property(x => x.Amount).HasPrecision(12, 2);
         b.Entity<ArchivedTransactionEntity>().HasIndex(x => new { x.LegacySystem, x.TransactionId }).IsUnique();
@@ -87,5 +90,17 @@ public sealed class LegacyPaymentDetailsEntity
     public string LegacyPaymentReference { get; set; } = "";
     public string? ProviderTransactionId { get; set; }
     public DateTimeOffset ImportedAt { get; set; }
+}
+public sealed class TransactionEntity
+{
+    public Guid TransactionId { get; set; }
+    public string CaseNo { get; set; } = "";
+    public string TransactionType { get; set; } = "";
+    public int TransactionMethodId { get; set; }
+    public DateTimeOffset TransactionDate { get; set; }
+    public decimal Amount { get; set; }
+    public string TransactionStatus { get; set; } = "";
+    public string? OriginalPaymentReference { get; set; }
+    public string PaymentReference { get; set; } = "";
 }
 public sealed class StatusHistoryEntity { public Guid Id { get; set; } public Guid PaymentEntityId { get; set; } public string Status { get; set; } = ""; public DateTimeOffset Created { get; set; } }

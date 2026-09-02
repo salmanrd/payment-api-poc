@@ -23,6 +23,39 @@ public sealed class ApiTests(Factory factory) : IClassFixture<Factory>
     private static object Sr(string ccd = "1234567890123456") => new { callBackUrl = "https://example.test/callback", caseReference = "case", ccdCaseNumber = ccd, fees = new[] { new { code = "FEE0001", version = "1", calculatedAmount = 10.00m } } };
     private async Task<string> CreateSr(string? ccd = null) { var r = await client.PostAsJsonAsync("/service-request", Sr(ccd ?? Random.Shared.NextInt64(1_000_000_000_000_000, 9_999_999_999_999_999).ToString())); return (await r.Content.ReadFromJsonAsync<ServiceRequestResponse>())!.ServiceRequestReference; }
     [Fact] public async Task Health_is_up() => Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/health")).StatusCode);
+    [Fact]
+    public async Task Transaction_can_be_persisted_with_payment_references()
+    {
+        var transactionId = Guid.NewGuid();
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<PaymentDbContext>();
+            db.Transactions.Add(new TransactionEntity
+            {
+                TransactionId = transactionId,
+                CaseNo = "1234567890123456",
+                TransactionType = "Payment",
+                TransactionMethodId = 1,
+                TransactionDate = DateTimeOffset.UtcNow,
+                Amount = 10m,
+                TransactionStatus = "Success",
+                OriginalPaymentReference = "RC-ORIGINAL",
+                PaymentReference = "RC-CURRENT"
+            });
+            await db.SaveChangesAsync();
+        }
+
+        using var checkScope = factory.Services.CreateScope();
+        var saved = await checkScope.ServiceProvider.GetRequiredService<PaymentDbContext>()
+            .Transactions.AsNoTracking().SingleAsync(x => x.TransactionId == transactionId);
+        Assert.Equal("1234567890123456", saved.CaseNo);
+        Assert.Equal("Payment", saved.TransactionType);
+        Assert.Equal(1, saved.TransactionMethodId);
+        Assert.Equal(10m, saved.Amount);
+        Assert.Equal("Success", saved.TransactionStatus);
+        Assert.Equal("RC-ORIGINAL", saved.OriginalPaymentReference);
+        Assert.Equal("RC-CURRENT", saved.PaymentReference);
+    }
     [Fact] public async Task Service_request_is_created() { var r = await client.PostAsJsonAsync("/service-request", Sr()); Assert.Equal(HttpStatusCode.Created, r.StatusCode); Assert.StartsWith("SR-", (await r.Content.ReadFromJsonAsync<ServiceRequestResponse>())!.ServiceRequestReference); }
     [Fact] public async Task Multiple_service_requests_can_use_the_same_ccd_case() { var ccd = Random.Shared.NextInt64().ToString(); var a = await client.PostAsJsonAsync("/service-request", Sr(ccd)); var b = await client.PostAsJsonAsync("/service-request", Sr(ccd)); Assert.NotEqual((await a.Content.ReadFromJsonAsync<ServiceRequestResponse>())!.ServiceRequestReference, (await b.Content.ReadFromJsonAsync<ServiceRequestResponse>())!.ServiceRequestReference); }
     [Fact]
