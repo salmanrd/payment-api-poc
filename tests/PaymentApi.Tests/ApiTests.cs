@@ -272,7 +272,7 @@ public sealed class ApiTests(Factory factory) : IClassFixture<Factory>
     {
         var transactionId = Guid.NewGuid();
         var csv = "TransactionId,CaseNo,TransactionType,TransactionMethodId,TransactionDate,Amount,TransactionStatus,OriginalPaymentReference,PaymentReference\n" +
-                  $"{transactionId},1234567890123456,Payment,1,2026-09-16T10:30:00Z,19.95,Success,RC-OLD,RC-NEW\n";
+                  $"{transactionId},1234567890123456,Appeal Fee,Bank Transfer,2026-09-16T10:30:00Z,19.95,Success,RC-OLD,RC-NEW\n";
 
         var response = await PostCsv(csv);
 
@@ -288,6 +288,8 @@ public sealed class ApiTests(Factory factory) : IClassFixture<Factory>
             .AsNoTracking().SingleAsync(transaction => transaction.TransactionId == transactionId);
         Assert.Equal("RC-OLD", saved.OriginalPaymentReference);
         Assert.Equal(19.95m, saved.Amount);
+        Assert.Equal("Appeal Fee", saved.TransactionType);
+        Assert.Equal(1, saved.TransactionMethodId);
     }
 
     [Fact]

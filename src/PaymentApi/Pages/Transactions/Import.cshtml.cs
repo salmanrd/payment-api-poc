@@ -123,7 +123,7 @@ public sealed class ImportModel(PaymentDbContext database, ILogger<ImportModel> 
 
                 if (!Guid.TryParse(Value("TransactionId"), out var transactionId))
                     throw InvalidValue(rowNumber, "TransactionId");
-                if (!int.TryParse(Value("TransactionMethodId"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var methodId))
+                if (!TryParseTransactionMethod(Value("TransactionMethodId"), out var methodId))
                     throw InvalidValue(rowNumber, "TransactionMethodId");
                 if (!DateTimeOffset.TryParse(Value("TransactionDate"), CultureInfo.InvariantCulture,
                         DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var transactionDate))
@@ -163,6 +163,23 @@ public sealed class ImportModel(PaymentDbContext database, ILogger<ImportModel> 
 
     private static string NormaliseHeader(string header) =>
         new(header.Where(char.IsLetterOrDigit).Select(char.ToUpperInvariant).ToArray());
+
+    private static bool TryParseTransactionMethod(string value, out int methodId)
+    {
+        if (string.Equals(value, "Any", StringComparison.OrdinalIgnoreCase))
+        {
+            methodId = 0;
+            return true;
+        }
+
+        if (string.Equals(value, "Bank Transfer", StringComparison.OrdinalIgnoreCase))
+        {
+            methodId = 1;
+            return true;
+        }
+
+        return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out methodId);
+    }
 
     private static string Required(string value, int rowNumber, string column) =>
         string.IsNullOrWhiteSpace(value) ? throw InvalidValue(rowNumber, column) : value;
