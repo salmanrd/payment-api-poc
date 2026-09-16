@@ -49,7 +49,7 @@ else
                             <td>@(request.Party ?? "—")</td>
                             <td>@request.Reference</td>
                             <td class="actions">
-                                <a href="#">Review</a>
+                                <a asp-page="/ServiceRequests/Details" asp-route-serviceRequestReference="@request.Reference">Review</a>
                                 @if (request.Status == "Paid")
                                 {
                                     <button type="button" class="secondary-button" disabled>Take telephony payment</button>
