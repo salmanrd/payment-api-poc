@@ -45,11 +45,11 @@ gcloud builds submit "${ROOT_DIR}" \
   --region="${GCP_REGION}" \
   --tag="${IMAGE}"
 
-TF_VAR_project_id="${PROJECT_ID}" \
-TF_VAR_container_image="${IMAGE}" \
-  terraform -chdir="${TERRAFORM_DIR}" plan \
-    -input=false \
-    -out="${PLAN_FILE}"
+terraform -chdir="${TERRAFORM_DIR}" plan \
+  -input=false \
+  -var="project_id=${PROJECT_ID}" \
+  -var="container_image=${IMAGE}" \
+  -out="${PLAN_FILE}"
 
 terraform -chdir="${TERRAFORM_DIR}" apply -input=false "${PLAN_FILE}"
 
