@@ -1,0 +1,71 @@
+@page "/transactions/import"
+@model PaymentApi.Pages.Transactions.ImportModel
+@{
+    ViewData["Title"] = "Import transactions";
+}
+
+<div class="form-page transaction-import">
+    <h1>Import transactions</h1>
+    <p class="lede">Upload a CSV file to add transactions. A file can contain up to @PaymentApi.Pages.Transactions.ImportModel.MaximumRows transaction rows.</p>
+
+    @if (Model.ImportedCount is not null)
+    {
+        <div class="message message-success" role="status">
+            <h2>CSV imported</h2>
+            <p>@Model.ImportedCount transaction@(Model.ImportedCount == 1 ? "" : "s") added.</p>
+        </div>
+    }
+
+    @if (!ViewData.ModelState.IsValid)
+    {
+        <div class="message message-error" role="alert">
+            <h2>The CSV could not be imported</h2>
+            <div asp-validation-summary="All"></div>
+        </div>
+    }
+
+    <form method="post" enctype="multipart/form-data" class="upload-form">
+        <div class="form-group stacked-group">
+            <label asp-for="CsvFile">CSV file</label>
+            <div class="hint" id="csv-hint">
+                Required columns: TransactionId, CaseNo, TransactionType, TransactionMethodId,
+                TransactionDate, Amount, TransactionStatus and PaymentReference.
+                OriginalPaymentReference is optional.
+            </div>
+            <input asp-for="CsvFile" type="file" accept=".csv,text/csv" aria-describedby="csv-hint" />
+        </div>
+        <button type="submit">Upload CSV</button>
+    </form>
+</div>
+
+<section class="transaction-section" aria-labelledby="transactions-heading">
+    <h2 id="transactions-heading">Transactions</h2>
+    @if (Model.Transactions.Count == 0)
+    {
+        <p>No transactions have been imported.</p>
+    }
+    else
+    {
+        <div class="table-scroll">
+            <table>
+                <thead>
+                    <tr><th>Transaction ID</th><th>Case number</th><th>Type</th><th>Date</th><th>Amount</th><th>Status</th><th>Payment reference</th></tr>
+                </thead>
+                <tbody>
+                @foreach (var transaction in Model.Transactions)
+                {
+                    <tr>
+                        <td>@transaction.TransactionId</td>
+                        <td>@transaction.CaseNo</td>
+                        <td>@transaction.TransactionType</td>
+                        <td>@transaction.TransactionDate.ToString("dd MMM yyyy HH:mm")</td>
+                        <td class="numeric">@transaction.Amount.ToString("C", System.Globalization.CultureInfo.GetCultureInfo("en-GB"))</td>
+                        <td>@transaction.TransactionStatus</td>
+                        <td>@transaction.PaymentReference</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>

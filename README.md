@@ -13,6 +13,10 @@ application also exposes the read-only JSON routes `GET /payments` and
 Create a service request from `/service-requests/new`. The form supports one or
 more fees and submits them to the `POST /service-request` API.
 
+Import transactions from `/transactions/import`. CSV files are validated before
+anything is saved and may contain no more than 100 transaction rows. The page
+lists the transactions currently stored in the `Transactions` table.
+
 ## Creating a service request through the API
 
 `GET /payments` is a read-only endpoint and does not prove that the database is
