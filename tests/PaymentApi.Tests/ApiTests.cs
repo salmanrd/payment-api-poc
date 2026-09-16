@@ -1,5 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text;
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
@@ -264,6 +266,74 @@ public sealed class ApiTests(Factory factory) : IClassFixture<Factory>
         Assert.Contains("Create a service request", html);
         Assert.Contains("ccdCaseNumber", html);
         Assert.Contains("fetch(\"/service-request\"", script);
+    }
+    [Fact]
+    public async Task Transaction_csv_can_be_imported_and_displayed()
+    {
+        var transactionId = Guid.NewGuid();
+        var csv = "TransactionId,CaseNo,TransactionType,TransactionMethodId,TransactionDate,Amount,TransactionStatus,OriginalPaymentReference,PaymentReference\n" +
+                  $"{transactionId},1234567890123456,Payment,1,2026-09-16T10:30:00Z,19.95,Success,RC-OLD,RC-NEW\n";
+
+        var response = await PostCsv(csv);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal("/transactions/import?imported=1", response.Headers.Location?.OriginalString);
+        var page = await client.GetStringAsync(response.Headers.Location);
+        Assert.Contains("1 transaction added", page);
+        Assert.Contains(transactionId.ToString(), page);
+        Assert.Contains("RC-NEW", page);
+        using var scope = factory.Services.CreateScope();
+        var saved = await scope.ServiceProvider.GetRequiredService<PaymentDbContext>().Transactions
+            .AsNoTracking().SingleAsync(transaction => transaction.TransactionId == transactionId);
+        Assert.Equal("RC-OLD", saved.OriginalPaymentReference);
+        Assert.Equal(19.95m, saved.Amount);
+    }
+
+    [Fact]
+    public async Task Transaction_csv_over_100_rows_is_rejected_without_importing_any_rows()
+    {
+        var ids = Enumerable.Range(0, 101).Select(_ => Guid.NewGuid()).ToArray();
+        var csv = new StringBuilder("TransactionId,CaseNo,TransactionType,TransactionMethodId,TransactionDate,Amount,TransactionStatus,PaymentReference\n");
+        foreach (var id in ids)
+            csv.AppendLine($"{id},case-1,Payment,1,2026-09-16T10:30:00Z,10.00,Success,RC-{id:N}");
+
+        var response = await PostCsv(csv.ToString());
+        var html = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("more than the maximum 100 rows", html);
+        using var scope = factory.Services.CreateScope();
+        Assert.False(await scope.ServiceProvider.GetRequiredService<PaymentDbContext>().Transactions
+            .AnyAsync(transaction => ids.Contains(transaction.TransactionId)));
+    }
+
+    [Fact]
+    public async Task Invalid_transaction_csv_is_rejected_without_importing_valid_rows()
+    {
+        var validId = Guid.NewGuid();
+        var csv = "TransactionId,CaseNo,TransactionType,TransactionMethodId,TransactionDate,Amount,TransactionStatus,PaymentReference\n" +
+                  $"{validId},case-1,Payment,1,2026-09-16T10:30:00Z,10.00,Success,RC-VALID\n" +
+                  $"{Guid.NewGuid()},case-2,Payment,not-a-number,2026-09-16T10:30:00Z,10.00,Success,RC-INVALID\n";
+
+        var response = await PostCsv(csv);
+        var html = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("Row 3 has a missing or invalid TransactionMethodId", html);
+        using var scope = factory.Services.CreateScope();
+        Assert.False(await scope.ServiceProvider.GetRequiredService<PaymentDbContext>().Transactions
+            .AnyAsync(transaction => transaction.TransactionId == validId));
+    }
+
+    private async Task<HttpResponseMessage> PostCsv(string csv)
+    {
+        var page = await client.GetStringAsync("/transactions/import");
+        var tokenMatch = Regex.Match(page, "name=\"__RequestVerificationToken\" type=\"hidden\" value=\"([^\"]+)\"");
+        Assert.True(tokenMatch.Success);
+        using var content = new MultipartFormDataContent();
+        content.Add(new StringContent(WebUtility.HtmlDecode(tokenMatch.Groups[1].Value)), "__RequestVerificationToken");
+        content.Add(new ByteArrayContent(Encoding.UTF8.GetBytes(csv)), "CsvFile", "transactions.csv");
+        return await client.PostAsync("/transactions/import", content);
     }
     [Fact] public async Task Success_persists_history_and_redirects() { var sr = await CreateSr(); var created = await client.PostAsJsonAsync($"/service-request/{sr}/card-payments", new { currency = "GBP", amount = 10m, returnUrl = "https://example.test/return" }); var p = await created.Content.ReadFromJsonAsync<CardPaymentResponse>(); var result = await client.PostAsync($"/pay/{p!.PaymentReference}/success", null); Assert.Equal(HttpStatusCode.Redirect, result.StatusCode); using var scope = factory.Services.CreateScope(); var saved = await scope.ServiceProvider.GetRequiredService<PaymentDbContext>().Payments.Include(x => x.History).SingleAsync(x => x.Reference == p.PaymentReference); Assert.Equal("Success", saved.Status); Assert.Equal(2, saved.History.Count); }
 }
