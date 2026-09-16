@@ -16,6 +16,8 @@ more fees and submits them to the `POST /service-request` API.
 Import transactions from `/transactions/import`. CSV files are validated before
 anything is saved and may contain no more than 100 transaction rows. The page
 lists the transactions currently stored in the `Transactions` table.
+[`samples/transactions.csv`](samples/transactions.csv) contains ten fabricated
+transactions that can be uploaded directly from the import page.
 
 ## Creating a service request through the API
 

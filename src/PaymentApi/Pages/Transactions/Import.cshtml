@@ -30,6 +30,7 @@
             <div class="hint" id="csv-hint">
                 Required columns: TransactionId, CaseNo, TransactionType, TransactionMethodId,
                 TransactionDate, Amount, TransactionStatus and PaymentReference.
+                TransactionMethodId accepts Any or Bank Transfer (numeric IDs are also supported).
                 OriginalPaymentReference is optional.
             </div>
             <input asp-for="CsvFile" type="file" accept=".csv,text/csv" aria-describedby="csv-hint" />
