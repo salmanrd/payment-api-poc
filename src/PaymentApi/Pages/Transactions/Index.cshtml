@@ -1,0 +1,62 @@
+@page "/transactions"
+@model PaymentApi.Pages.Transactions.IndexModel
+@{
+    ViewData["Title"] = "Transactions";
+}
+
+<h1>Transactions</h1>
+
+<form method="get" class="filters" role="search">
+    <div class="form-group search-group">
+        <label asp-for="CaseNo">Search by case number</label>
+        <div class="search-row">
+            <input asp-for="CaseNo" type="search" />
+            <button type="submit">Search</button>
+        </div>
+        <div class="hint">Enter all or part of a case number</div>
+    </div>
+</form>
+
+<section class="transaction-section" aria-labelledby="transactions-heading">
+    <h2 id="transactions-heading">Transaction data</h2>
+    @if (Model.Transactions.Count == 0)
+    {
+        <p>No transactions found.</p>
+    }
+    else
+    {
+        <div class="table-scroll">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Transaction ID</th>
+                        <th>Case number</th>
+                        <th>Type</th>
+                        <th>Method ID</th>
+                        <th>Date</th>
+                        <th>Amount</th>
+                        <th>Status</th>
+                        <th>Original payment reference</th>
+                        <th>Payment reference</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var transaction in Model.Transactions)
+                {
+                    <tr>
+                        <td>@transaction.TransactionId</td>
+                        <td>@transaction.CaseNo</td>
+                        <td>@transaction.TransactionType</td>
+                        <td>@transaction.TransactionMethodId</td>
+                        <td>@transaction.TransactionDate.ToString("dd MMM yyyy HH:mm")</td>
+                        <td class="numeric">@transaction.Amount.ToString("C", System.Globalization.CultureInfo.GetCultureInfo("en-GB"))</td>
+                        <td>@transaction.TransactionStatus</td>
+                        <td>@(transaction.OriginalPaymentReference ?? "—")</td>
+                        <td>@transaction.PaymentReference</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>

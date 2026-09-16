@@ -37,35 +37,3 @@
         <button type="submit">Upload CSV</button>
     </form>
 </div>
-
-<section class="transaction-section" aria-labelledby="transactions-heading">
-    <h2 id="transactions-heading">Transactions</h2>
-    @if (Model.Transactions.Count == 0)
-    {
-        <p>No transactions have been imported.</p>
-    }
-    else
-    {
-        <div class="table-scroll">
-            <table>
-                <thead>
-                    <tr><th>Transaction ID</th><th>Case number</th><th>Type</th><th>Date</th><th>Amount</th><th>Status</th><th>Payment reference</th></tr>
-                </thead>
-                <tbody>
-                @foreach (var transaction in Model.Transactions)
-                {
-                    <tr>
-                        <td>@transaction.TransactionId</td>
-                        <td>@transaction.CaseNo</td>
-                        <td>@transaction.TransactionType</td>
-                        <td>@transaction.TransactionDate.ToString("dd MMM yyyy HH:mm")</td>
-                        <td class="numeric">@transaction.Amount.ToString("C", System.Globalization.CultureInfo.GetCultureInfo("en-GB"))</td>
-                        <td>@transaction.TransactionStatus</td>
-                        <td>@transaction.PaymentReference</td>
-                    </tr>
-                }
-                </tbody>
-            </table>
-        </div>
-    }
-</section>
