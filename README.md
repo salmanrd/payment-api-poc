@@ -200,6 +200,10 @@ tag can be supplied as the first argument when necessary:
 ./scripts/release-gcp.sh release-2026-09-02
 ```
 
+The release script passes the newly built image to Terraform as an explicit
+command-line variable, overriding the placeholder or previous image recorded in
+`terraform/terraform.tfvars` for that release.
+
 Run any required EF Core migrations against Supabase before invoking the
 script. The script deliberately never reads the database credential or runs
 migrations from the operator's machine.
