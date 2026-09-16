@@ -13,3 +13,8 @@ TestResults/
 *.tfvars
 !*.tfvars.example
 crash.log
+terraform/.terraform.lock.hcl
+src/PaymentApi/.vscode/launch.json
+src/PaymentApi/.vscode/tasks.json
+src/PaymentApi/appsettings copy.json
+.vscode/launch.json

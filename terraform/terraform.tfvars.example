@@ -1,9 +1,9 @@
-project_id              = "my-gcp-project"
+project_id              = "payment-api-gcp-project"
 service_name            = "payment-api"
-container_image         = "europe-west2-docker.pkg.dev/my-gcp-project/payment-api/payment-api:2026-09-02"
+container_image         = "europe-west2-docker.pkg.dev/payment-api-gcp-project/payment-api/payment-api:2026-09-02"
 database_secret_id      = "payment-db-connection-string"
 database_secret_version = "1"
-public_base_url         = "https://payments.example.com"
+public_base_url         = "https://payment-api-fsnraq6fra-nw.a.run.app"
 
 # Keep the POC inexpensive and limit the number of connections opened to Supabase.
 min_instance_count = 0
