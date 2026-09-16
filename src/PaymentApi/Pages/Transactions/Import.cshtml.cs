@@ -19,28 +19,21 @@ public sealed class ImportModel(PaymentDbContext database, ILogger<ImportModel> 
     [BindProperty]
     public IFormFile? CsvFile { get; set; }
 
-    public IReadOnlyList<TransactionEntity> Transactions { get; private set; } = [];
     public int? ImportedCount { get; private set; }
 
-    public async Task OnGet(int? imported, CancellationToken cancellationToken)
-    {
-        ImportedCount = imported;
-        await LoadTransactions(cancellationToken);
-    }
+    public void OnGet(int? imported) => ImportedCount = imported;
 
     public async Task<IActionResult> OnPost(CancellationToken cancellationToken)
     {
         if (CsvFile is null || CsvFile.Length == 0)
         {
             ModelState.AddModelError(nameof(CsvFile), "Select a non-empty CSV file.");
-            await LoadTransactions(cancellationToken);
             return Page();
         }
 
         if (!string.Equals(Path.GetExtension(CsvFile.FileName), ".csv", StringComparison.OrdinalIgnoreCase))
         {
             ModelState.AddModelError(nameof(CsvFile), "The selected file must have a .csv extension.");
-            await LoadTransactions(cancellationToken);
             return Page();
         }
 
@@ -53,7 +46,6 @@ public sealed class ImportModel(PaymentDbContext database, ILogger<ImportModel> 
         catch (CsvImportException exception)
         {
             ModelState.AddModelError(nameof(CsvFile), exception.Message);
-            await LoadTransactions(cancellationToken);
             return Page();
         }
 
@@ -64,7 +56,6 @@ public sealed class ImportModel(PaymentDbContext database, ILogger<ImportModel> 
         if (duplicateIds.Length > 0)
         {
             ModelState.AddModelError(nameof(CsvFile), $"The CSV contains a duplicate transaction ID: {duplicateIds[0]}.");
-            await LoadTransactions(cancellationToken);
             return Page();
         }
 
@@ -76,7 +67,6 @@ public sealed class ImportModel(PaymentDbContext database, ILogger<ImportModel> 
         if (existingId is not null)
         {
             ModelState.AddModelError(nameof(CsvFile), $"Transaction {existingId} already exists. No rows were imported.");
-            await LoadTransactions(cancellationToken);
             return Page();
         }
 
@@ -89,17 +79,11 @@ public sealed class ImportModel(PaymentDbContext database, ILogger<ImportModel> 
         {
             logger.LogError(exception, "Unable to import transactions from {FileName}", CsvFile.FileName);
             ModelState.AddModelError(nameof(CsvFile), "The transactions could not be imported. No rows were added.");
-            await LoadTransactions(cancellationToken);
             return Page();
         }
 
         return RedirectToPage(new { imported = rows.Count });
     }
-
-    private async Task LoadTransactions(CancellationToken cancellationToken) =>
-        Transactions = await database.Transactions.AsNoTracking()
-            .OrderByDescending(transaction => transaction.TransactionDate)
-            .ToListAsync(cancellationToken);
 
     private static List<TransactionEntity> ParseCsv(Stream stream)
     {

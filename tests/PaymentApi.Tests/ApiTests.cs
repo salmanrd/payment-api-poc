@@ -278,16 +278,55 @@ public sealed class ApiTests(Factory factory) : IClassFixture<Factory>
 
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
         Assert.Equal("/transactions/import?imported=1", response.Headers.Location?.OriginalString);
-        var page = await client.GetStringAsync(response.Headers.Location);
-        Assert.Contains("1 transaction added", page);
-        Assert.Contains(transactionId.ToString(), page);
-        Assert.Contains("RC-NEW", page);
+        var importPage = await client.GetStringAsync(response.Headers.Location);
+        var transactionsPage = await client.GetStringAsync("/transactions");
+        Assert.Contains("1 transaction added", importPage);
+        Assert.Contains(transactionId.ToString(), transactionsPage);
+        Assert.Contains("RC-NEW", transactionsPage);
         using var scope = factory.Services.CreateScope();
         var saved = await scope.ServiceProvider.GetRequiredService<PaymentDbContext>().Transactions
             .AsNoTracking().SingleAsync(transaction => transaction.TransactionId == transactionId);
         Assert.Equal("RC-OLD", saved.OriginalPaymentReference);
         Assert.Equal(19.95m, saved.Amount);
     }
+
+    [Fact]
+    public async Task Transactions_can_be_searched_by_partial_case_number_newest_first()
+    {
+        var searchToken = Guid.NewGuid().ToString("N")[..8];
+        var olderId = Guid.NewGuid();
+        var newerId = Guid.NewGuid();
+        var unrelatedId = Guid.NewGuid();
+        using (var scope = factory.Services.CreateScope())
+        {
+            var database = scope.ServiceProvider.GetRequiredService<PaymentDbContext>();
+            database.Transactions.AddRange(
+                Transaction(olderId, $"Case-{searchToken}-A", new DateTimeOffset(2026, 9, 15, 10, 0, 0, TimeSpan.Zero)),
+                Transaction(newerId, $"CASE-{searchToken}-B", new DateTimeOffset(2026, 9, 16, 10, 0, 0, TimeSpan.Zero)),
+                Transaction(unrelatedId, $"case-unrelated-{Guid.NewGuid():N}", new DateTimeOffset(2026, 9, 17, 10, 0, 0, TimeSpan.Zero)));
+            await database.SaveChangesAsync();
+        }
+
+        var html = await client.GetStringAsync($"/transactions?caseNo={searchToken.ToUpperInvariant()}");
+
+        Assert.Contains(olderId.ToString(), html);
+        Assert.Contains(newerId.ToString(), html);
+        Assert.DoesNotContain(unrelatedId.ToString(), html);
+        Assert.True(html.IndexOf(newerId.ToString(), StringComparison.Ordinal) <
+                    html.IndexOf(olderId.ToString(), StringComparison.Ordinal));
+    }
+
+    private static TransactionEntity Transaction(Guid id, string caseNo, DateTimeOffset date) => new()
+    {
+        TransactionId = id,
+        CaseNo = caseNo,
+        TransactionType = "Payment",
+        TransactionMethodId = 1,
+        TransactionDate = date,
+        Amount = 10m,
+        TransactionStatus = "Success",
+        PaymentReference = $"RC-{id:N}"
+    };
 
     [Fact]
     public async Task Transaction_csv_over_100_rows_is_rejected_without_importing_any_rows()
