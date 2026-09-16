@@ -217,11 +217,32 @@ public sealed class ApiTests(Factory factory) : IClassFixture<Factory>
         Assert.Contains(sr, caseHtml);
         Assert.Contains(secondSr, caseHtml);
         Assert.Contains(reference, caseHtml);
+        Assert.Contains($"href=\"/service-requests/{sr}\"", caseHtml);
         Assert.Equal(HttpStatusCode.OK, details.StatusCode);
         var detailsHtml = await details.Content.ReadAsStringAsync();
         Assert.Contains("Payment details", detailsHtml);
         Assert.Contains($"href=\"/cases/{ccd}\"", detailsHtml);
     }
+    [Fact]
+    public async Task Service_request_review_shows_fees_and_payments()
+    {
+        var ccd = Random.Shared.NextInt64(1_000_000_000_000_000, 9_999_999_999_999_999).ToString();
+        var serviceRequest = await CreateSr(ccd);
+        var created = await client.PostAsJsonAsync($"/service-request/{serviceRequest}/card-payments", new { currency = "GBP", amount = 10m, returnUrl = "https://example.test/return" });
+        var payment = (await created.Content.ReadFromJsonAsync<CardPaymentResponse>())!;
+
+        var response = await client.GetAsync($"/service-requests/{serviceRequest}");
+        var html = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("Service request reference", html);
+        Assert.Contains(serviceRequest, html);
+        Assert.Contains("FEE0001", html);
+        Assert.Contains("Total fees: £10.00", html);
+        Assert.Contains(payment.PaymentReference, html);
+        Assert.Contains($"href=\"/cases/{ccd}\"", html);
+    }
+    [Fact] public async Task Missing_service_request_ui_is_not_found() => Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/service-requests/does-not-exist")).StatusCode);
     [Fact]
     public async Task Case_page_keeps_empty_payments_table_section_visible()
     {

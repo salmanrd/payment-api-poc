@@ -77,6 +77,17 @@ button:disabled { opacity: .65; cursor: wait; }
 .summary-list > div { display: grid; grid-template-columns: minmax(220px, 35%) 1fr; padding: 14px 0; border-bottom: 1px solid var(--border); }
 .summary-list dt { font-weight: 700; }
 .summary-list dd { margin: 0; overflow-wrap: anywhere; }
+.service-request-summary { max-width: none; }
+.service-request-section { margin-top: 62px; }
+.service-request-table th:last-child, .service-request-table td:last-child { padding-right: 10px; }
+.service-request-table th:nth-child(2) { width: 16%; }
+.service-request-table th:nth-child(3) { width: 16%; }
+.service-request-table th:last-child { width: 16%; }
+.fee-version { color: #505a5f; }
+.service-request-total { margin: 34px 0 0; text-align: right; font-size: 19px; }
+.payments-detail { margin-top: 64px; }
+.payments-detail h2 { margin-bottom: 18px; }
+.payments-detail .service-request-total { margin-top: 34px; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 @media (max-width: 700px) {
     .page-width { width: calc(100% - 32px); }

@@ -1,0 +1,97 @@
+@page "/service-requests/{serviceRequestReference}"
+@model PaymentApi.Pages.ServiceRequests.DetailsModel
+@{
+    ViewData["Title"] = "Service request";
+}
+
+@if (Model.ServiceRequest is not null)
+{
+    <a asp-page="/Cases/Details" asp-route-ccdCaseNumber="@Model.ServiceRequest.CcdCaseNumber" class="back-link">Back</a>
+}
+else
+{
+    <a asp-page="/Payments/Index" class="back-link">Back</a>
+}
+
+<h1>Service request</h1>
+
+@if (Model.LoadFailed)
+{
+    <div class="message message-error" role="alert"><h2>Service request could not be loaded</h2><p>Try again later.</p></div>
+}
+else if (Model.ServiceRequest is null)
+{
+    <div class="message" role="alert"><h2>Service request not found</h2><p>Check the service request reference and try again.</p></div>
+}
+else
+{
+    var request = Model.ServiceRequest;
+    <dl class="summary-list service-request-summary">
+        <div><dt>Service request reference</dt><dd>@request.Reference</dd></div>
+        <div><dt>Status</dt><dd>@request.Status</dd></div>
+        <div><dt>Date created</dt><dd><time datetime="@request.Created.ToString("O")">@request.Created.ToString("dd MMMM yyyy")</time></dd></div>
+        <div><dt>Party</dt><dd>@(request.Party ?? "—")</dd></div>
+        <div><dt>CCD event</dt><dd>—</dd></div>
+    </dl>
+
+    <section class="service-request-section" aria-labelledby="fees-heading">
+        <h2 id="fees-heading" class="visually-hidden">Fees</h2>
+        <div class="table-scroll">
+            <table class="service-request-table">
+                <thead><tr><th>Fee</th><th>Amount</th><th>Total</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
+                <tbody>
+                @foreach (var fee in request.Fees)
+                {
+                    <tr>
+                        <td>@fee.Code <span class="fee-version">(version @fee.Version)</span></td>
+                        <td>1 x £@fee.Amount.ToString("N2")</td>
+                        <td>£@fee.Amount.ToString("N2")</td>
+                        <td class="actions"><button type="button" class="secondary-button">Add remission</button></td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+        <p class="service-request-total">Total fees: £@request.TotalFees.ToString("N2")</p>
+    </section>
+
+    <section class="service-request-section" aria-labelledby="remissions-heading">
+        <h2 id="remissions-heading" class="visually-hidden">Help with fees or remission</h2>
+        <div class="table-scroll">
+            <table class="service-request-table">
+                <thead><tr><th>Help with fees or<br />remission code</th><th>Reference</th><th>Fee</th><th>Remission<br />Amount</th></tr></thead>
+                <tbody><tr><td colspan="4">No help with fees or remissions.</td></tr></tbody>
+            </table>
+        </div>
+        <p class="service-request-total">Total reductions: £0.00</p>
+        <p class="service-request-total">Total fees to pay: £@request.TotalFees.ToString("N2")</p>
+    </section>
+
+    <section class="service-request-section payments-detail" aria-labelledby="payments-heading">
+        <h2 id="payments-heading">Payments</h2>
+        @if (request.Payments.Count == 0)
+        {
+            <div class="message"><h3>No payments found</h3><p>There are no payments for this service request.</p></div>
+        }
+        else
+        {
+            <div class="table-scroll">
+                <table class="service-request-table">
+                    <thead><tr><th><span class="visually-hidden">Payment reference</span></th><th>Date created</th><th>Amount</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
+                    <tbody>
+                    @foreach (var payment in request.Payments)
+                    {
+                        <tr>
+                            <td><a asp-page="/Payments/Details" asp-route-paymentReference="@payment.Reference">Review</a></td>
+                            <td><time datetime="@payment.Created.ToString("O")">@payment.Created.ToString("dd MMM yyyy")</time></td>
+                            <td>£@payment.Amount.ToString("N2")</td>
+                            <td class="actions"><button type="button" class="secondary-button" disabled="@(payment.Status != "Success")">Issue refund</button></td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
+        <p class="service-request-total">Total fees left to pay: <strong>£@((request.TotalFees - request.TotalPaid).ToString("N2"))</strong></p>
+    </section>
+}
