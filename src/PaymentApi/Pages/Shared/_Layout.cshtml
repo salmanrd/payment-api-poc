@@ -1,15 +1,17 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>@ViewData["Title"] - HMCTS Payments prototype</title>
+    <title>@ViewData["Title"] - Payments prototype</title>
     <link rel="stylesheet" href="~/css/payments.css" asp-append-version="true" />
 </head>
+
 <body>
     <header class="service-header">
         <div class="page-width header-content">
-            <span class="hmcts-mark" aria-label="HM Courts and Tribunals Service">HMCTS</span>
+            <span class="hmcts-mark" aria-label="Payments Service">Payments POC</span>
             <a class="service-name" asp-page="/Payments/Index">Payments</a>
             <nav class="service-navigation" aria-label="Service navigation">
                 <a asp-page="/ServiceRequests/Create">Create service request</a>
@@ -23,4 +25,5 @@
         @RenderBody()
     </main>
 </body>
+
 </html>
