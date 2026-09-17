@@ -18,6 +18,8 @@ anything is saved and may contain no more than 100 transaction rows. The page
 lists the transactions currently stored in the `Transactions` table.
 [`samples/transactions.csv`](samples/transactions.csv) contains ten fabricated
 transactions that can be uploaded directly from the import page.
+Transaction IDs are stored as PostgreSQL `bigint` values, so the CSV's
+`TransactionId` column must contain a signed 64-bit whole number.
 
 ## Creating a service request through the API
 

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text;
@@ -28,7 +29,7 @@ public sealed class ApiTests(Factory factory) : IClassFixture<Factory>
     [Fact]
     public async Task Transaction_can_be_persisted_with_payment_references()
     {
-        var transactionId = Guid.NewGuid();
+        var transactionId = Random.Shared.NextInt64(1, long.MaxValue);
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<PaymentDbContext>();
@@ -270,7 +271,7 @@ public sealed class ApiTests(Factory factory) : IClassFixture<Factory>
     [Fact]
     public async Task Transaction_csv_can_be_imported_and_displayed()
     {
-        var transactionId = Guid.NewGuid();
+        var transactionId = Random.Shared.NextInt64(1, long.MaxValue);
         var csv = "TransactionId,CaseNo,TransactionType,TransactionMethodId,TransactionDate,Amount,TransactionStatus,OriginalPaymentReference,PaymentReference\n" +
                   $"{transactionId},1234567890123456,Appeal Fee,Bank Transfer,2026-09-16T10:30:00Z,19.95,Success,RC-OLD,RC-NEW\n";
 
@@ -281,7 +282,7 @@ public sealed class ApiTests(Factory factory) : IClassFixture<Factory>
         var importPage = await client.GetStringAsync(response.Headers.Location);
         var transactionsPage = await client.GetStringAsync("/transactions");
         Assert.Contains("1 transaction added", importPage);
-        Assert.Contains(transactionId.ToString(), transactionsPage);
+        Assert.Contains(transactionId.ToString(CultureInfo.InvariantCulture), transactionsPage);
         Assert.Contains("RC-NEW", transactionsPage);
         using var scope = factory.Services.CreateScope();
         var saved = await scope.ServiceProvider.GetRequiredService<PaymentDbContext>().Transactions
@@ -296,9 +297,9 @@ public sealed class ApiTests(Factory factory) : IClassFixture<Factory>
     public async Task Transactions_can_be_searched_by_partial_case_number_newest_first()
     {
         var searchToken = Guid.NewGuid().ToString("N")[..8];
-        var olderId = Guid.NewGuid();
-        var newerId = Guid.NewGuid();
-        var unrelatedId = Guid.NewGuid();
+        var olderId = Random.Shared.NextInt64(1, long.MaxValue);
+        var newerId = Random.Shared.NextInt64(1, long.MaxValue);
+        var unrelatedId = Random.Shared.NextInt64(1, long.MaxValue);
         using (var scope = factory.Services.CreateScope())
         {
             var database = scope.ServiceProvider.GetRequiredService<PaymentDbContext>();
@@ -318,7 +319,7 @@ public sealed class ApiTests(Factory factory) : IClassFixture<Factory>
                     html.IndexOf(olderId.ToString(), StringComparison.Ordinal));
     }
 
-    private static TransactionEntity Transaction(Guid id, string caseNo, DateTimeOffset date) => new()
+    private static TransactionEntity Transaction(long id, string caseNo, DateTimeOffset date) => new()
     {
         TransactionId = id,
         CaseNo = caseNo,
@@ -327,16 +328,16 @@ public sealed class ApiTests(Factory factory) : IClassFixture<Factory>
         TransactionDate = date,
         Amount = 10m,
         TransactionStatus = "Success",
-        PaymentReference = $"RC-{id:N}"
+        PaymentReference = $"RC-{id}"
     };
 
     [Fact]
     public async Task Transaction_csv_over_100_rows_is_rejected_without_importing_any_rows()
     {
-        var ids = Enumerable.Range(0, 101).Select(_ => Guid.NewGuid()).ToArray();
+        var ids = Enumerable.Range(1, 101).Select(value => (long)value).ToArray();
         var csv = new StringBuilder("TransactionId,CaseNo,TransactionType,TransactionMethodId,TransactionDate,Amount,TransactionStatus,PaymentReference\n");
         foreach (var id in ids)
-            csv.AppendLine($"{id},case-1,Payment,1,2026-09-16T10:30:00Z,10.00,Success,RC-{id:N}");
+            csv.AppendLine($"{id},case-1,Payment,1,2026-09-16T10:30:00Z,10.00,Success,RC-{id}");
 
         var response = await PostCsv(csv.ToString());
         var html = await response.Content.ReadAsStringAsync();
@@ -351,10 +352,10 @@ public sealed class ApiTests(Factory factory) : IClassFixture<Factory>
     [Fact]
     public async Task Invalid_transaction_csv_is_rejected_without_importing_valid_rows()
     {
-        var validId = Guid.NewGuid();
+        var validId = Random.Shared.NextInt64(1, long.MaxValue);
         var csv = "TransactionId,CaseNo,TransactionType,TransactionMethodId,TransactionDate,Amount,TransactionStatus,PaymentReference\n" +
                   $"{validId},case-1,Payment,1,2026-09-16T10:30:00Z,10.00,Success,RC-VALID\n" +
-                  $"{Guid.NewGuid()},case-2,Payment,not-a-number,2026-09-16T10:30:00Z,10.00,Success,RC-INVALID\n";
+                  $"{Random.Shared.NextInt64(1, long.MaxValue)},case-2,Payment,not-a-number,2026-09-16T10:30:00Z,10.00,Success,RC-INVALID\n";
 
         var response = await PostCsv(csv);
         var html = await response.Content.ReadAsStringAsync();
@@ -364,6 +365,19 @@ public sealed class ApiTests(Factory factory) : IClassFixture<Factory>
         using var scope = factory.Services.CreateScope();
         Assert.False(await scope.ServiceProvider.GetRequiredService<PaymentDbContext>().Transactions
             .AnyAsync(transaction => transaction.TransactionId == validId));
+    }
+
+    [Fact]
+    public async Task Non_numeric_transaction_id_is_rejected()
+    {
+        var csv = "TransactionId,CaseNo,TransactionType,TransactionMethodId,TransactionDate,Amount,TransactionStatus,PaymentReference\n" +
+                  $"{Guid.NewGuid()},case-1,Payment,1,2026-09-16T10:30:00Z,10.00,Success,RC-INVALID\n";
+
+        var response = await PostCsv(csv);
+        var html = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("Row 2 has a missing or invalid TransactionId", html);
     }
 
     private async Task<HttpResponseMessage> PostCsv(string csv)

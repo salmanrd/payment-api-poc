@@ -62,7 +62,7 @@ public sealed class ImportModel(PaymentDbContext database, ILogger<ImportModel> 
         var ids = rows.Select(row => row.TransactionId).ToArray();
         var existingId = await database.Transactions.AsNoTracking()
             .Where(transaction => ids.Contains(transaction.TransactionId))
-            .Select(transaction => (Guid?)transaction.TransactionId)
+            .Select(transaction => (long?)transaction.TransactionId)
             .FirstOrDefaultAsync(cancellationToken);
         if (existingId is not null)
         {
@@ -121,7 +121,8 @@ public sealed class ImportModel(PaymentDbContext database, ILogger<ImportModel> 
                     return index < fields.Length ? fields[index].Trim() : string.Empty;
                 }
 
-                if (!Guid.TryParse(Value("TransactionId"), out var transactionId))
+                if (!long.TryParse(Value("TransactionId"), NumberStyles.Integer,
+                        CultureInfo.InvariantCulture, out var transactionId))
                     throw InvalidValue(rowNumber, "TransactionId");
                 if (!TryParseTransactionMethod(Value("TransactionMethodId"), out var methodId))
                     throw InvalidValue(rowNumber, "TransactionMethodId");
