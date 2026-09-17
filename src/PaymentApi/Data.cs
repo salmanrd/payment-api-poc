@@ -20,6 +20,7 @@ public sealed class PaymentDbContext(DbContextOptions<PaymentDbContext> options)
         b.Entity<FeeEntity>().Property(x => x.Amount).HasPrecision(12, 2);
         b.Entity<PaymentEntity>().Property(x => x.Amount).HasPrecision(12, 2);
         b.Entity<TransactionEntity>().HasKey(x => x.TransactionId);
+        b.Entity<TransactionEntity>().Property(x => x.TransactionId).ValueGeneratedNever();
         b.Entity<TransactionEntity>().Property(x => x.Amount).HasPrecision(12, 2);
         b.Entity<ArchivedTransactionEntity>().Property(x => x.FeeTotal).HasPrecision(12, 2);
         b.Entity<ArchivedTransactionEntity>().Property(x => x.Amount).HasPrecision(12, 2);
@@ -93,7 +94,7 @@ public sealed class LegacyPaymentDetailsEntity
 }
 public sealed class TransactionEntity
 {
-    public Guid TransactionId { get; set; }
+    public long TransactionId { get; set; }
     public string CaseNo { get; set; } = "";
     public string TransactionType { get; set; } = "";
     public int TransactionMethodId { get; set; }
