@@ -28,10 +28,10 @@
         <div class="form-group stacked-group">
             <label asp-for="CsvFile">CSV file</label>
             <div class="hint" id="csv-hint">
-                Required columns: TransactionId, CaseNo, TransactionType, TransactionMethodId,
+                Required columns: TransactionId, CaseNo, TransactionType, TransactionMethod,
                 TransactionDate, Amount, TransactionStatus and PaymentReference.
                 TransactionId must be a whole number in the signed 64-bit integer range.
-                TransactionMethodId accepts Any or Bank Transfer (numeric IDs are also supported).
+                TransactionMethod is stored as text.
                 OriginalPaymentReference is optional.
             </div>
             <input asp-for="CsvFile" type="file" accept=".csv,text/csv" aria-describedby="csv-hint" />

@@ -1,4 +1,4 @@
-TransactionId,CaseNo,TransactionType,TransactionMethodId,TransactionDate,Amount,TransactionStatus,OriginalPaymentReference,PaymentReference
+TransactionId,CaseNo,TransactionType,TransactionMethod,TransactionDate,Amount,TransactionStatus,OriginalPaymentReference,PaymentReference
 100000000000000001,1728394056172839,Appeal Fee,Any,2026-09-01T09:15:00Z,120.00,Success,,RC-2026-0001
 100000000000000002,2839405167283940,Receipt,Bank Transfer,2026-09-02T10:30:00Z,120.00,Success,RC-2026-0001,RC-2026-0002
 100000000000000003,3940516278394051,Appeal Fee Adjustment,Any,2026-09-03T11:45:00Z,-20.00,Success,RC-2026-0001,RC-2026-0003

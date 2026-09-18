@@ -12,7 +12,7 @@ public sealed class ImportModel(PaymentDbContext database, ILogger<ImportModel> 
 
     private static readonly string[] RequiredHeaders =
     [
-        "TransactionId", "CaseNo", "TransactionType", "TransactionMethodId",
+        "TransactionId", "CaseNo", "TransactionType", "TransactionMethod",
         "TransactionDate", "Amount", "TransactionStatus", "PaymentReference"
     ];
 
@@ -124,8 +124,6 @@ public sealed class ImportModel(PaymentDbContext database, ILogger<ImportModel> 
                 if (!long.TryParse(Value("TransactionId"), NumberStyles.Integer,
                         CultureInfo.InvariantCulture, out var transactionId))
                     throw InvalidValue(rowNumber, "TransactionId");
-                if (!TryParseTransactionMethod(Value("TransactionMethodId"), out var methodId))
-                    throw InvalidValue(rowNumber, "TransactionMethodId");
                 if (!DateTimeOffset.TryParse(Value("TransactionDate"), CultureInfo.InvariantCulture,
                         DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var transactionDate))
                     throw InvalidValue(rowNumber, "TransactionDate");
@@ -134,6 +132,7 @@ public sealed class ImportModel(PaymentDbContext database, ILogger<ImportModel> 
 
                 var caseNo = Required(Value("CaseNo"), rowNumber, "CaseNo");
                 var type = Required(Value("TransactionType"), rowNumber, "TransactionType");
+                var method = Required(Value("TransactionMethod"), rowNumber, "TransactionMethod");
                 var status = Required(Value("TransactionStatus"), rowNumber, "TransactionStatus");
                 var paymentReference = Required(Value("PaymentReference"), rowNumber, "PaymentReference");
                 var originalReference = positions.ContainsKey(NormaliseHeader("OriginalPaymentReference"))
@@ -144,7 +143,7 @@ public sealed class ImportModel(PaymentDbContext database, ILogger<ImportModel> 
                     TransactionId = transactionId,
                     CaseNo = caseNo,
                     TransactionType = type,
-                    TransactionMethodId = methodId,
+                    TransactionMethod = method,
                     TransactionDate = transactionDate,
                     Amount = amount,
                     TransactionStatus = status,
@@ -164,23 +163,6 @@ public sealed class ImportModel(PaymentDbContext database, ILogger<ImportModel> 
 
     private static string NormaliseHeader(string header) =>
         new(header.Where(char.IsLetterOrDigit).Select(char.ToUpperInvariant).ToArray());
-
-    private static bool TryParseTransactionMethod(string value, out int methodId)
-    {
-        if (string.Equals(value, "Any", StringComparison.OrdinalIgnoreCase))
-        {
-            methodId = 0;
-            return true;
-        }
-
-        if (string.Equals(value, "Bank Transfer", StringComparison.OrdinalIgnoreCase))
-        {
-            methodId = 1;
-            return true;
-        }
-
-        return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out methodId);
-    }
 
     private static string Required(string value, int rowNumber, string column) =>
         string.IsNullOrWhiteSpace(value) ? throw InvalidValue(rowNumber, column) : value;

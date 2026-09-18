@@ -97,7 +97,7 @@ public sealed class TransactionEntity
     public long TransactionId { get; set; }
     public string CaseNo { get; set; } = "";
     public string TransactionType { get; set; } = "";
-    public int TransactionMethodId { get; set; }
+    public string TransactionMethod { get; set; } = "";
     public DateTimeOffset TransactionDate { get; set; }
     public decimal Amount { get; set; }
     public string TransactionStatus { get; set; } = "";
