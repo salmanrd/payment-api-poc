@@ -32,7 +32,7 @@
                         <th>Transaction ID</th>
                         <th>Case number</th>
                         <th>Type</th>
-                        <th>Method ID</th>
+                        <th>Method</th>
                         <th>Date</th>
                         <th>Amount</th>
                         <th>Status</th>
@@ -47,7 +47,7 @@
                         <td>@transaction.TransactionId</td>
                         <td>@transaction.CaseNo</td>
                         <td>@transaction.TransactionType</td>
-                        <td>@transaction.TransactionMethodId</td>
+                        <td>@transaction.TransactionMethod</td>
                         <td>@transaction.TransactionDate.ToString("dd MMM yyyy HH:mm")</td>
                         <td class="numeric">@transaction.Amount.ToString("C", System.Globalization.CultureInfo.GetCultureInfo("en-GB"))</td>
                         <td>@transaction.TransactionStatus</td>

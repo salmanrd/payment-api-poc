@@ -20,6 +20,8 @@ lists the transactions currently stored in the `Transactions` table.
 transactions that can be uploaded directly from the import page.
 Transaction IDs are stored as PostgreSQL `bigint` values, so the CSV's
 `TransactionId` column must contain a signed 64-bit whole number.
+Transaction methods are stored as PostgreSQL `text` values and supplied in the
+CSV's `TransactionMethod` column.
 
 ## Creating a service request through the API
 

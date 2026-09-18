@@ -38,7 +38,7 @@ public sealed class ApiTests(Factory factory) : IClassFixture<Factory>
                 TransactionId = transactionId,
                 CaseNo = "1234567890123456",
                 TransactionType = "Payment",
-                TransactionMethodId = 1,
+                TransactionMethod = "Bank Transfer",
                 TransactionDate = DateTimeOffset.UtcNow,
                 Amount = 10m,
                 TransactionStatus = "Success",
@@ -53,7 +53,7 @@ public sealed class ApiTests(Factory factory) : IClassFixture<Factory>
             .Transactions.AsNoTracking().SingleAsync(x => x.TransactionId == transactionId);
         Assert.Equal("1234567890123456", saved.CaseNo);
         Assert.Equal("Payment", saved.TransactionType);
-        Assert.Equal(1, saved.TransactionMethodId);
+        Assert.Equal("Bank Transfer", saved.TransactionMethod);
         Assert.Equal(10m, saved.Amount);
         Assert.Equal("Success", saved.TransactionStatus);
         Assert.Equal("RC-ORIGINAL", saved.OriginalPaymentReference);
@@ -272,8 +272,8 @@ public sealed class ApiTests(Factory factory) : IClassFixture<Factory>
     public async Task Transaction_csv_can_be_imported_and_displayed()
     {
         var transactionId = Random.Shared.NextInt64(1, long.MaxValue);
-        var csv = "TransactionId,CaseNo,TransactionType,TransactionMethodId,TransactionDate,Amount,TransactionStatus,OriginalPaymentReference,PaymentReference\n" +
-                  $"{transactionId},1234567890123456,Appeal Fee,Bank Transfer,2026-09-16T10:30:00Z,19.95,Success,RC-OLD,RC-NEW\n";
+        var csv = "TransactionId,CaseNo,TransactionType,TransactionMethod,TransactionDate,Amount,TransactionStatus,OriginalPaymentReference,PaymentReference\n" +
+                  $"{transactionId},1234567890123456,Appeal Fee,Online Card,2026-09-16T10:30:00Z,19.95,Success,RC-OLD,RC-NEW\n";
 
         var response = await PostCsv(csv);
 
@@ -283,6 +283,7 @@ public sealed class ApiTests(Factory factory) : IClassFixture<Factory>
         var transactionsPage = await client.GetStringAsync("/transactions");
         Assert.Contains("1 transaction added", importPage);
         Assert.Contains(transactionId.ToString(CultureInfo.InvariantCulture), transactionsPage);
+        Assert.Contains("Online Card", transactionsPage);
         Assert.Contains("RC-NEW", transactionsPage);
         using var scope = factory.Services.CreateScope();
         var saved = await scope.ServiceProvider.GetRequiredService<PaymentDbContext>().Transactions
@@ -290,7 +291,7 @@ public sealed class ApiTests(Factory factory) : IClassFixture<Factory>
         Assert.Equal("RC-OLD", saved.OriginalPaymentReference);
         Assert.Equal(19.95m, saved.Amount);
         Assert.Equal("Appeal Fee", saved.TransactionType);
-        Assert.Equal(1, saved.TransactionMethodId);
+        Assert.Equal("Online Card", saved.TransactionMethod);
     }
 
     [Fact]
@@ -324,7 +325,7 @@ public sealed class ApiTests(Factory factory) : IClassFixture<Factory>
         TransactionId = id,
         CaseNo = caseNo,
         TransactionType = "Payment",
-        TransactionMethodId = 1,
+        TransactionMethod = "Bank Transfer",
         TransactionDate = date,
         Amount = 10m,
         TransactionStatus = "Success",
@@ -335,9 +336,9 @@ public sealed class ApiTests(Factory factory) : IClassFixture<Factory>
     public async Task Transaction_csv_over_100_rows_is_rejected_without_importing_any_rows()
     {
         var ids = Enumerable.Range(1, 101).Select(value => (long)value).ToArray();
-        var csv = new StringBuilder("TransactionId,CaseNo,TransactionType,TransactionMethodId,TransactionDate,Amount,TransactionStatus,PaymentReference\n");
+        var csv = new StringBuilder("TransactionId,CaseNo,TransactionType,TransactionMethod,TransactionDate,Amount,TransactionStatus,PaymentReference\n");
         foreach (var id in ids)
-            csv.AppendLine($"{id},case-1,Payment,1,2026-09-16T10:30:00Z,10.00,Success,RC-{id}");
+            csv.AppendLine($"{id},case-1,Payment,Bank Transfer,2026-09-16T10:30:00Z,10.00,Success,RC-{id}");
 
         var response = await PostCsv(csv.ToString());
         var html = await response.Content.ReadAsStringAsync();
@@ -350,18 +351,18 @@ public sealed class ApiTests(Factory factory) : IClassFixture<Factory>
     }
 
     [Fact]
-    public async Task Invalid_transaction_csv_is_rejected_without_importing_valid_rows()
+    public async Task Transaction_csv_with_missing_method_is_rejected_without_importing_valid_rows()
     {
         var validId = Random.Shared.NextInt64(1, long.MaxValue);
-        var csv = "TransactionId,CaseNo,TransactionType,TransactionMethodId,TransactionDate,Amount,TransactionStatus,PaymentReference\n" +
-                  $"{validId},case-1,Payment,1,2026-09-16T10:30:00Z,10.00,Success,RC-VALID\n" +
-                  $"{Random.Shared.NextInt64(1, long.MaxValue)},case-2,Payment,not-a-number,2026-09-16T10:30:00Z,10.00,Success,RC-INVALID\n";
+        var csv = "TransactionId,CaseNo,TransactionType,TransactionMethod,TransactionDate,Amount,TransactionStatus,PaymentReference\n" +
+                  $"{validId},case-1,Payment,Bank Transfer,2026-09-16T10:30:00Z,10.00,Success,RC-VALID\n" +
+                  $"{Random.Shared.NextInt64(1, long.MaxValue)},case-2,Payment,,2026-09-16T10:30:00Z,10.00,Success,RC-INVALID\n";
 
         var response = await PostCsv(csv);
         var html = await response.Content.ReadAsStringAsync();
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Contains("Row 3 has a missing or invalid TransactionMethodId", html);
+        Assert.Contains("Row 3 has a missing or invalid TransactionMethod", html);
         using var scope = factory.Services.CreateScope();
         Assert.False(await scope.ServiceProvider.GetRequiredService<PaymentDbContext>().Transactions
             .AnyAsync(transaction => transaction.TransactionId == validId));
@@ -370,8 +371,8 @@ public sealed class ApiTests(Factory factory) : IClassFixture<Factory>
     [Fact]
     public async Task Non_numeric_transaction_id_is_rejected()
     {
-        var csv = "TransactionId,CaseNo,TransactionType,TransactionMethodId,TransactionDate,Amount,TransactionStatus,PaymentReference\n" +
-                  $"{Guid.NewGuid()},case-1,Payment,1,2026-09-16T10:30:00Z,10.00,Success,RC-INVALID\n";
+        var csv = "TransactionId,CaseNo,TransactionType,TransactionMethod,TransactionDate,Amount,TransactionStatus,PaymentReference\n" +
+                  $"{Guid.NewGuid()},case-1,Payment,Bank Transfer,2026-09-16T10:30:00Z,10.00,Success,RC-INVALID\n";
 
         var response = await PostCsv(csv);
         var html = await response.Content.ReadAsStringAsync();
