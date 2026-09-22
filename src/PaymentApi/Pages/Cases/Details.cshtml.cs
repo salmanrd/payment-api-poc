@@ -51,6 +51,6 @@ public sealed class DetailsModel(PaymentDbContext database, ILogger<DetailsModel
         }
     }
 
-    public sealed record ServiceRequestRow(string Reference, string Status, decimal Amount, string? Party);
+    public sealed record ServiceRequestRow(string Reference, string Status, decimal Amount, string? CaseReference);
     public sealed record PaymentRow(string Reference, string Status, decimal Amount, DateTimeOffset DateAllocated, string ServiceRequestReference);
 }

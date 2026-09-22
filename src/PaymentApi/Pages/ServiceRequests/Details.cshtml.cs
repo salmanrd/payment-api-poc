@@ -56,7 +56,7 @@ public sealed class DetailsModel(PaymentDbContext database, ILogger<DetailsModel
         string Reference,
         string Status,
         DateTimeOffset Created,
-        string? Party,
+        string? CaseReference,
         string CcdCaseNumber,
         IReadOnlyList<FeeDetails> Fees,
         IReadOnlyList<PaymentDetails> Payments,
