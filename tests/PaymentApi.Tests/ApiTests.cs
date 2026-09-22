@@ -64,14 +64,14 @@ public sealed class ApiTests(Factory factory) : IClassFixture<Factory>
     [Fact]
     public async Task Legacy_service_request_is_validated_and_idempotent()
     {
-        var transactionId = Guid.NewGuid().ToString();
+        var caseNumber = $"case-{Guid.NewGuid():N}";
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<PaymentDbContext>();
-            db.ArchivedTransactions.Add(new ArchivedTransactionEntity { Id = Guid.NewGuid(), LegacySystem = "fees-v1", TransactionId = transactionId, TransactionType = "Fee", CcdCaseNumber = "123", CaseReference = "case", FeeTotal = 10m });
+            db.Transactions.Add(Transaction(Random.Shared.NextInt64(1, long.MaxValue), caseNumber, DateTimeOffset.UtcNow));
             await db.SaveChangesAsync();
         }
-        var body = new { legacySystem = "fees-v1", transactionId, callBackUrl = "https://example.test/callback", caseReference = "case", ccdCaseNumber = "123", fees = new[] { new { code = "FEE1", version = "1", calculatedAmount = 10m } } };
+        var body = new { legacySystem = "fees-v1", callBackUrl = "https://example.test/callback", caseReference = "case", ccdCaseNumber = caseNumber, fees = new[] { new { code = "FEE1", version = "1", calculatedAmount = 10m } } };
         var first = await client.PostAsJsonAsync("/legacy-service-request", body);
         var retry = await client.PostAsJsonAsync("/legacy-service-request", body);
         Assert.Equal(HttpStatusCode.Created, first.StatusCode);
@@ -79,38 +79,58 @@ public sealed class ApiTests(Factory factory) : IClassFixture<Factory>
         Assert.Equal((await first.Content.ReadFromJsonAsync<LegacyServiceRequestResponse>())!.ServiceRequestReference,
             (await retry.Content.ReadFromJsonAsync<LegacyServiceRequestResponse>())!.ServiceRequestReference);
         using var checkScope = factory.Services.CreateScope();
-        var details = await checkScope.ServiceProvider.GetRequiredService<PaymentDbContext>().LegacyServiceRequestDetails.SingleAsync(x => x.TransactionId == transactionId);
+        var details = await checkScope.ServiceProvider.GetRequiredService<PaymentDbContext>().LegacyServiceRequestDetails.SingleAsync(x => x.CcdCaseNumber == caseNumber);
         Assert.Equal("fees-v1", details.LegacySystem);
     }
+
+    [Fact]
+    public async Task Legacy_service_request_requires_case_number_in_transactions()
+    {
+        var response = await client.PostAsJsonAsync("/legacy-service-request", new
+        {
+            legacySystem = "fees-v1",
+            callBackUrl = "https://example.test/callback",
+            ccdCaseNumber = $"missing-{Guid.NewGuid():N}",
+            fees = new[] { new { code = "FEE1", version = "1", calculatedAmount = 10m } }
+        });
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal("Case number not found in transactions",
+            (await response.Content.ReadFromJsonAsync<ErrorResponse>())!.Error);
+    }
+
     [Fact]
     public async Task Changed_legacy_retry_conflicts()
     {
-        var transactionId = Guid.NewGuid().ToString();
+        var caseNumber = $"case-{Guid.NewGuid():N}";
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<PaymentDbContext>();
-            db.ArchivedTransactions.Add(new ArchivedTransactionEntity { Id = Guid.NewGuid(), LegacySystem = "fees-v1", TransactionId = transactionId, TransactionType = "Fee" });
+            db.Transactions.Add(Transaction(Random.Shared.NextInt64(1, long.MaxValue), caseNumber, DateTimeOffset.UtcNow));
             await db.SaveChangesAsync();
         }
-        var original = new { legacySystem = "fees-v1", transactionId, callBackUrl = "https://example.test/one", ccdCaseNumber = "123", fees = new[] { new { code = "FEE1", version = "1", calculatedAmount = 10m } } };
-        var changed = new { legacySystem = "fees-v1", transactionId, callBackUrl = "https://example.test/two", ccdCaseNumber = "123", fees = new[] { new { code = "FEE1", version = "1", calculatedAmount = 10m } } };
+        var original = new { legacySystem = "fees-v1", callBackUrl = "https://example.test/one", ccdCaseNumber = caseNumber, fees = new[] { new { code = "FEE1", version = "1", calculatedAmount = 10m } } };
+        var changed = new { legacySystem = "fees-v1", callBackUrl = "https://example.test/two", ccdCaseNumber = caseNumber, fees = new[] { new { code = "FEE1", version = "1", calculatedAmount = 10m } } };
         Assert.Equal(HttpStatusCode.Created, (await client.PostAsJsonAsync("/legacy-service-request", original)).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await client.PostAsJsonAsync("/legacy-service-request", changed)).StatusCode);
     }
     [Fact]
     public async Task Legacy_payment_is_imported_completed_and_is_idempotent()
     {
-        var feeTransactionId = Guid.NewGuid().ToString();
-        var paymentTransactionId = Guid.NewGuid().ToString();
+        var caseNumber = $"case-{Guid.NewGuid():N}";
+        var paymentTransactionId = Random.Shared.NextInt64(1, long.MaxValue);
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<PaymentDbContext>();
-            db.ArchivedTransactions.AddRange(
-                new ArchivedTransactionEntity { Id = Guid.NewGuid(), LegacySystem = "fees-v1", TransactionId = feeTransactionId, TransactionType = "Fee", FeeTotal = 10m },
-                new ArchivedTransactionEntity { Id = Guid.NewGuid(), LegacySystem = "fees-v1", TransactionId = paymentTransactionId, TransactionType = "Payment", FeeTransactionId = feeTransactionId, LegacyPaymentReference = "LP-123", Amount = 10m, Currency = "GBP", ProviderTransactionId = "provider-456" });
+            db.Transactions.Add(new TransactionEntity
+            {
+                TransactionId = paymentTransactionId, CaseNo = caseNumber, TransactionType = "Payment",
+                TransactionMethod = "Online Card", TransactionDate = DateTimeOffset.UtcNow, Amount = 10m,
+                TransactionStatus = "Success", PaymentReference = "LP-123"
+            });
             await db.SaveChangesAsync();
         }
-        var legacySr = await client.PostAsJsonAsync("/legacy-service-request", new { legacySystem = "fees-v1", transactionId = feeTransactionId, callBackUrl = "https://example.test/callback", ccdCaseNumber = "123", fees = new[] { new { code = "FEE1", version = "1", calculatedAmount = 10m } } });
+        var legacySr = await client.PostAsJsonAsync("/legacy-service-request", new { legacySystem = "fees-v1", callBackUrl = "https://example.test/callback", ccdCaseNumber = caseNumber, fees = new[] { new { code = "FEE1", version = "1", calculatedAmount = 10m } } });
         var sr = (await legacySr.Content.ReadFromJsonAsync<LegacyServiceRequestResponse>())!.ServiceRequestReference;
         var body = new { legacySystem = "fees-v1", transactionId = paymentTransactionId, legacyPaymentReference = "LP-123", amount = 10m, currency = "GBP" };
 
@@ -126,24 +146,26 @@ public sealed class ApiTests(Factory factory) : IClassFixture<Factory>
         var saved = await checkScope.ServiceProvider.GetRequiredService<PaymentDbContext>().Payments
             .Include(x => x.History).Include(x => x.LegacyDetails).SingleAsync(x => x.Reference == response.PaymentReference);
         Assert.Equal("Success", Assert.Single(saved.History).Status);
-        Assert.Equal("provider-456", saved.LegacyDetails!.ProviderTransactionId);
         Assert.Equal(string.Empty, saved.ReturnUrl);
     }
 
     [Fact]
-    public async Task Legacy_payment_rejects_archive_discrepancies()
+    public async Task Legacy_payment_rejects_transaction_discrepancies()
     {
-        var feeTransactionId = Guid.NewGuid().ToString();
-        var paymentTransactionId = Guid.NewGuid().ToString();
+        var caseNumber = $"case-{Guid.NewGuid():N}";
+        var paymentTransactionId = Random.Shared.NextInt64(1, long.MaxValue);
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<PaymentDbContext>();
-            db.ArchivedTransactions.AddRange(
-                new ArchivedTransactionEntity { Id = Guid.NewGuid(), LegacySystem = "fees-v1", TransactionId = feeTransactionId, TransactionType = "Fee" },
-                new ArchivedTransactionEntity { Id = Guid.NewGuid(), LegacySystem = "fees-v1", TransactionId = paymentTransactionId, TransactionType = "Payment", FeeTransactionId = feeTransactionId, LegacyPaymentReference = "LP-789", Amount = 10m, Currency = "GBP" });
+            db.Transactions.Add(new TransactionEntity
+            {
+                TransactionId = paymentTransactionId, CaseNo = caseNumber, TransactionType = "Payment",
+                TransactionMethod = "Online Card", TransactionDate = DateTimeOffset.UtcNow, Amount = 10m,
+                TransactionStatus = "Success", PaymentReference = "LP-789"
+            });
             await db.SaveChangesAsync();
         }
-        var legacySr = await client.PostAsJsonAsync("/legacy-service-request", new { legacySystem = "fees-v1", transactionId = feeTransactionId, callBackUrl = "https://example.test/callback", ccdCaseNumber = "123", fees = new[] { new { code = "FEE1", version = "1", calculatedAmount = 10m } } });
+        var legacySr = await client.PostAsJsonAsync("/legacy-service-request", new { legacySystem = "fees-v1", callBackUrl = "https://example.test/callback", ccdCaseNumber = caseNumber, fees = new[] { new { code = "FEE1", version = "1", calculatedAmount = 10m } } });
         var sr = (await legacySr.Content.ReadFromJsonAsync<LegacyServiceRequestResponse>())!.ServiceRequestReference;
 
         var result = await client.PostAsJsonAsync($"/service-request/{sr}/legacy-payments", new { legacySystem = "fees-v1", transactionId = paymentTransactionId, legacyPaymentReference = "LP-789", amount = 11m, currency = "GBP" });

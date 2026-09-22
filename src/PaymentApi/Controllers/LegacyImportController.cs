@@ -25,7 +25,7 @@ public sealed class LegacyImportController(PaymentService payments, IConfigurati
         {
             var error = new ErrorResponse(result.Error!);
             return result.Conflict ? Conflict(error) :
-                result.Error is "Service request not found" or "Archived transaction not found" ? NotFound(error) :
+                result.Error is "Service request not found" or "Transaction not found" ? NotFound(error) :
                 BadRequest(error);
         }
 
@@ -58,7 +58,7 @@ public sealed class LegacyImportController(PaymentService payments, IConfigurati
         if (result.ServiceRequest is null)
         {
             var error = new ErrorResponse(result.Error!);
-            return result.Error == "Archived transaction not found" ? NotFound(error) :
+            return result.Error == "Case number not found in transactions" ? NotFound(error) :
                 result.Error!.StartsWith("A materially different", StringComparison.Ordinal) ? Conflict(error) : BadRequest(error);
         }
 
