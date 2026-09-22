@@ -61,7 +61,7 @@ public sealed class PaymentService(PaymentDbContext db, IPaymentProvider provide
                 ? new(existing.ServiceRequest, null, false)
                 : new(null, "A materially different service request has already been imported for this legacy case", false);
 
-        if (!await db.Transactions.AsNoTracking().AnyAsync(x => x.CaseNo == request.CcdCaseNumber, ct))
+        if (!await db.Transactions.AsNoTracking().AnyAsync(x => x.CaseNo == request.CaseReference, ct))
             return new(null, "Case number not found in transactions", false);
 
         IDbContextTransaction? transaction = db.Database.IsRelational()
