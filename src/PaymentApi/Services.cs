@@ -55,21 +55,14 @@ public sealed class PaymentService(PaymentDbContext db, IPaymentProvider provide
     {
         var existing = await db.LegacyServiceRequestDetails.AsNoTracking()
             .Include(x => x.ServiceRequest).ThenInclude(x => x.Fees)
-            .SingleOrDefaultAsync(x => x.LegacySystem == request.LegacySystem && x.TransactionId == request.TransactionId, ct);
+            .SingleOrDefaultAsync(x => x.LegacySystem == request.LegacySystem && x.CcdCaseNumber == request.CcdCaseNumber, ct);
         if (existing is not null)
             return Matches(existing.ServiceRequest, request)
                 ? new(existing.ServiceRequest, null, false)
-                : new(null, "A materially different service request has already been imported for this legacy transaction", false);
+                : new(null, "A materially different service request has already been imported for this legacy case", false);
 
-        var archive = await db.ArchivedTransactions.AsNoTracking().SingleOrDefaultAsync(
-            x => x.LegacySystem == request.LegacySystem && x.TransactionId == request.TransactionId, ct);
-        if (archive is null) return new(null, "Archived transaction not found", false);
-        if (!string.Equals(archive.TransactionType, "Fee", StringComparison.OrdinalIgnoreCase))
-            return new(null, "Archived transaction must have transaction type Fee", false);
-        if ((archive.CcdCaseNumber is not null && archive.CcdCaseNumber != request.CcdCaseNumber) ||
-            (archive.CaseReference is not null && archive.CaseReference != request.CaseReference) ||
-            (archive.FeeTotal.HasValue && archive.FeeTotal.Value != request.Fees.Sum(x => x.CalculatedAmount)))
-            return new(null, "The requested case identifiers or fee total do not match the archived transaction", false);
+        if (!await db.Transactions.AsNoTracking().AnyAsync(x => x.CaseNo == request.CcdCaseNumber, ct))
+            return new(null, "Case number not found in transactions", false);
 
         IDbContextTransaction? transaction = db.Database.IsRelational()
             ? await db.Database.BeginTransactionAsync(ct) : null;
@@ -84,7 +77,7 @@ public sealed class PaymentService(PaymentDbContext db, IPaymentProvider provide
                 LegacyDetails = new LegacyServiceRequestDetailsEntity
                 {
                     Id = Guid.NewGuid(), LegacySystem = request.LegacySystem,
-                    TransactionId = request.TransactionId, ImportedAt = now
+                    CcdCaseNumber = request.CcdCaseNumber, ImportedAt = now
                 }
             };
             db.ServiceRequests.Add(entity);
@@ -102,11 +95,11 @@ public sealed class PaymentService(PaymentDbContext db, IPaymentProvider provide
             db.ChangeTracker.Clear();
             var winner = await db.LegacyServiceRequestDetails.AsNoTracking()
                 .Include(x => x.ServiceRequest).ThenInclude(x => x.Fees)
-                .SingleOrDefaultAsync(x => x.LegacySystem == request.LegacySystem && x.TransactionId == request.TransactionId, ct);
+                .SingleOrDefaultAsync(x => x.LegacySystem == request.LegacySystem && x.CcdCaseNumber == request.CcdCaseNumber, ct);
             if (winner is null) throw;
             return Matches(winner.ServiceRequest, request)
                 ? new(winner.ServiceRequest, null, false)
-                : new(null, "A materially different service request has already been imported for this legacy transaction", false);
+                : new(null, "A materially different service request has already been imported for this legacy case", false);
         }
         finally
         {
@@ -131,7 +124,7 @@ public sealed class PaymentService(PaymentDbContext db, IPaymentProvider provide
         if (existing is not null)
             return LegacyPaymentMatches(existing, serviceReference, request)
                 ? new(existing.Payment, null, false, false)
-                : new(null, "This archived payment transaction has already been imported with incompatible values", false, true);
+                : new(null, "This legacy payment transaction has already been imported with incompatible values", false, true);
 
         var referenceOwner = await db.LegacyPaymentDetails.AsNoTracking()
             .AnyAsync(x => x.LegacySystem == request.LegacySystem &&
@@ -145,17 +138,18 @@ public sealed class PaymentService(PaymentDbContext db, IPaymentProvider provide
         if (serviceRequest.LegacyDetails is null)
             return new(null, "Service request does not have legacy provenance", false, false);
 
-        var archive = await db.ArchivedTransactions.AsNoTracking().SingleOrDefaultAsync(
-            x => x.LegacySystem == request.LegacySystem && x.TransactionId == request.TransactionId, ct);
-        if (archive is null) return new(null, "Archived transaction not found", false, false);
-        if (!string.Equals(archive.TransactionType, "Payment", StringComparison.OrdinalIgnoreCase))
-            return new(null, "Archived transaction must have transaction type Payment", false, true);
+        if (!long.TryParse(request.TransactionId, out var transactionId))
+            return new(null, "Transaction not found", false, false);
+        var sourceTransaction = await db.Transactions.AsNoTracking()
+            .SingleOrDefaultAsync(x => x.TransactionId == transactionId, ct);
+        if (sourceTransaction is null) return new(null, "Transaction not found", false, false);
+        if (!string.Equals(sourceTransaction.TransactionType, "Payment", StringComparison.OrdinalIgnoreCase))
+            return new(null, "Transaction must have transaction type Payment", false, true);
         if (serviceRequest.LegacyDetails.LegacySystem != request.LegacySystem ||
-            archive.FeeTransactionId != serviceRequest.LegacyDetails.TransactionId)
-            return new(null, "Archived payment does not belong to the service request's archived Fee transaction", false, true);
-        if (archive.LegacyPaymentReference != request.LegacyPaymentReference || archive.Amount != request.Amount ||
-            !string.Equals(archive.Currency, request.Currency, StringComparison.Ordinal))
-            return new(null, "Legacy payment reference, amount, or currency does not match the archived transaction", false, true);
+            sourceTransaction.CaseNo != serviceRequest.CcdCaseNumber)
+            return new(null, "Transaction does not belong to the service request's case", false, true);
+        if (sourceTransaction.PaymentReference != request.LegacyPaymentReference || sourceTransaction.Amount != request.Amount)
+            return new(null, "Legacy payment reference or amount does not match the transaction", false, true);
 
         IDbContextTransaction? transaction = db.Database.IsRelational() ? await db.Database.BeginTransactionAsync(ct) : null;
         try
@@ -170,7 +164,7 @@ public sealed class PaymentService(PaymentDbContext db, IPaymentProvider provide
                 {
                     Id = Guid.NewGuid(), LegacySystem = request.LegacySystem, TransactionId = request.TransactionId,
                     LegacyPaymentReference = request.LegacyPaymentReference,
-                    ProviderTransactionId = archive.ProviderTransactionId, ImportedAt = now
+                    ImportedAt = now
                 }
             };
             db.Payments.Add(payment);
@@ -190,7 +184,7 @@ public sealed class PaymentService(PaymentDbContext db, IPaymentProvider provide
             if (winner is null) throw;
             return LegacyPaymentMatches(winner, serviceReference, request)
                 ? new(winner.Payment, null, false, false)
-                : new(null, "This archived payment transaction has already been imported with incompatible values", false, true);
+                : new(null, "This legacy payment transaction has already been imported with incompatible values", false, true);
         }
         finally
         {

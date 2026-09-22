@@ -26,9 +26,6 @@ public sealed class CreateLegacyServiceRequest
     [Required, JsonPropertyName("legacySystem")]
     public string LegacySystem { get; init; } = null!;
 
-    [Required, JsonPropertyName("transactionId")]
-    public string TransactionId { get; init; } = null!;
-
     [Required, JsonPropertyName("callBackUrl")]
     public string CallBackUrl { get; init; } = null!;
 
