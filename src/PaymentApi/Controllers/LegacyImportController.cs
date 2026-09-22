@@ -25,7 +25,7 @@ public sealed class LegacyImportController(PaymentService payments, IConfigurati
         {
             var error = new ErrorResponse(result.Error!);
             return result.Conflict ? Conflict(error) :
-                result.Error is "Service request not found" or "Transaction not found" ? NotFound(error) :
+                result.Error == "Service request not found" ? NotFound(error) :
                 BadRequest(error);
         }
 

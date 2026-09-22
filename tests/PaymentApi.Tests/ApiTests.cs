@@ -132,7 +132,7 @@ public sealed class ApiTests(Factory factory) : IClassFixture<Factory>
         }
         var legacySr = await client.PostAsJsonAsync("/legacy-service-request", new { legacySystem = "fees-v1", callBackUrl = "https://example.test/callback", ccdCaseNumber = caseNumber, fees = new[] { new { code = "FEE1", version = "1", calculatedAmount = 10m } } });
         var sr = (await legacySr.Content.ReadFromJsonAsync<LegacyServiceRequestResponse>())!.ServiceRequestReference;
-        var body = new { legacySystem = "fees-v1", transactionId = paymentTransactionId, legacyPaymentReference = "LP-123", amount = 10m, currency = "GBP" };
+        var body = new { legacySystem = "fees-v1", legacyPaymentReference = "LP-123", amount = 10m, currency = "GBP" };
 
         var first = await client.PostAsJsonAsync($"/service-request/{sr}/legacy-payments", body);
         var retry = await client.PostAsJsonAsync($"/service-request/{sr}/legacy-payments", body);
@@ -150,7 +150,7 @@ public sealed class ApiTests(Factory factory) : IClassFixture<Factory>
     }
 
     [Fact]
-    public async Task Legacy_payment_rejects_transaction_discrepancies()
+    public async Task Legacy_payment_does_not_require_a_transaction_id()
     {
         var caseNumber = $"case-{Guid.NewGuid():N}";
         var paymentTransactionId = Random.Shared.NextInt64(1, long.MaxValue);
@@ -168,10 +168,13 @@ public sealed class ApiTests(Factory factory) : IClassFixture<Factory>
         var legacySr = await client.PostAsJsonAsync("/legacy-service-request", new { legacySystem = "fees-v1", callBackUrl = "https://example.test/callback", ccdCaseNumber = caseNumber, fees = new[] { new { code = "FEE1", version = "1", calculatedAmount = 10m } } });
         var sr = (await legacySr.Content.ReadFromJsonAsync<LegacyServiceRequestResponse>())!.ServiceRequestReference;
 
-        var result = await client.PostAsJsonAsync($"/service-request/{sr}/legacy-payments", new { legacySystem = "fees-v1", transactionId = paymentTransactionId, legacyPaymentReference = "LP-789", amount = 11m, currency = "GBP" });
+        var result = await client.PostAsJsonAsync($"/service-request/{sr}/legacy-payments", new { legacySystem = "fees-v1", legacyPaymentReference = "LP-789", amount = 11m, currency = "GBP" });
+        var discrepancy = await client.PostAsJsonAsync($"/service-request/{sr}/legacy-payments", new { legacySystem = "fees-v1", transactionId = paymentTransactionId, legacyPaymentReference = "LP-WRONG", amount = 11m, currency = "GBP" });
 
-        Assert.Equal(HttpStatusCode.Conflict, result.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, result.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, discrepancy.StatusCode);
     }
+
     [Fact] public async Task Invalid_service_request_is_rejected() { var r = await client.PostAsJsonAsync("/service-request", new { callBackUrl = "x", ccdCaseNumber = "", fees = Array.Empty<object>() }); Assert.Equal(HttpStatusCode.BadRequest, r.StatusCode); }
     [Fact] public async Task Service_request_requires_at_least_one_fee() { var r = await client.PostAsJsonAsync("/service-request", new { callBackUrl = "https://example.test/callback", ccdCaseNumber = "1234567890123456", fees = Array.Empty<object>() }); Assert.Equal(HttpStatusCode.BadRequest, r.StatusCode); }
     [Fact] public async Task Service_request_rejects_a_zero_fee() { var r = await client.PostAsJsonAsync("/service-request", new { callBackUrl = "https://example.test/callback", ccdCaseNumber = "1234567890123456", fees = new[] { new { code = "FEE0001", version = "1", calculatedAmount = 0m } } }); Assert.Equal(HttpStatusCode.BadRequest, r.StatusCode); }
