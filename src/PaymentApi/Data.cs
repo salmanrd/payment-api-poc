@@ -68,7 +68,7 @@ public sealed class LegacyPaymentDetailsEntity
     public Guid PaymentEntityId { get; set; }
     public PaymentEntity Payment { get; set; } = null!;
     public string LegacySystem { get; set; } = "";
-    public string TransactionId { get; set; } = "";
+    public string? TransactionId { get; set; }
     public string LegacyPaymentReference { get; set; } = "";
     public string? ProviderTransactionId { get; set; }
     public DateTimeOffset ImportedAt { get; set; }
