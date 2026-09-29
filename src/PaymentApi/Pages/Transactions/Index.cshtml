@@ -13,7 +13,7 @@
             <input asp-for="CaseNo" type="search" />
             <button type="submit">Search</button>
         </div>
-        <div class="hint">Enter all or part of a case number</div>
+        <div class="hint">Enter all or part of a case number or CCD case number</div>
     </div>
 </form>
 
@@ -25,56 +25,33 @@
     }
     else
     {
-        <div class="table-scroll">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Transaction ID</th>
-                        <th>Case number</th>
-                        <th>Type</th>
-                        <th>Method</th>
-                        <th>Date</th>
-                        <th>Amount</th>
-                        <th>Cleared date</th>
-                        <th>Status</th>
-                        <th>Original payment reference</th>
-                        <th>Payment reference</th>
-                        <th>Aggregated payment URN</th>
-                        <th>Liberata notified date</th>
-                        <th>Liberata notified aggregated payment date</th>
-                        <th>Barclaycard transaction ID</th>
-                        <th>Last 4 digits</th>
-                        <th>Notes</th>
-                        <th>Expected date</th>
-                        <th>Referring transaction ID</th>
-                    </tr>
-                </thead>
-                <tbody>
-                @foreach (var transaction in Model.Transactions)
-                {
-                    <tr>
-                        <td>@transaction.TransactionId</td>
-                        <td>@transaction.CaseNo</td>
-                        <td>@transaction.TransactionType</td>
-                        <td>@transaction.TransactionMethod</td>
-                        <td>@transaction.TransactionDate.ToString("dd MMM yyyy HH:mm")</td>
-                        <td class="numeric">@transaction.Amount.ToString("C", System.Globalization.CultureInfo.GetCultureInfo("en-GB"))</td>
-                        <td>@(transaction.ClearedDate?.ToString("dd MMM yyyy HH:mm") ?? "—")</td>
-                        <td>@transaction.TransactionStatus</td>
-                        <td>@(transaction.OriginalPaymentReference ?? "—")</td>
-                        <td>@transaction.PaymentReference</td>
-                        <td>@(transaction.AggregatedPaymentURN ?? "—")</td>
-                        <td>@(transaction.LiberataNotifiedDate?.ToString("dd MMM yyyy HH:mm") ?? "—")</td>
-                        <td>@(transaction.LiberataNotifiedAggregatedPaymentDate?.ToString("dd MMM yyyy HH:mm") ?? "—")</td>
-                        <td>@(transaction.BarclaycardTransactionId ?? "—")</td>
-                        <td>@(transaction.Last4DigitsCard ?? "—")</td>
-                        <td>@(transaction.Notes ?? "—")</td>
-                        <td>@(transaction.ExpectedDate?.ToString("dd MMM yyyy HH:mm") ?? "—")</td>
-                        <td>@(transaction.ReferringTransactionId?.ToString() ?? "—")</td>
-                    </tr>
-                }
-                </tbody>
-            </table>
+        <div class="transaction-list">
+        @foreach (var transaction in Model.Transactions)
+        {
+            <article class="transaction-card">
+                <h3>Transaction @transaction.TransactionId</h3>
+                <dl class="transaction-details">
+                    <div><dt>Case number</dt><dd>@transaction.CaseNo</dd></div>
+                    <div><dt>CCD case number</dt><dd>@transaction.CcdCaseNumber</dd></div>
+                    <div><dt>Type</dt><dd>@transaction.TransactionType</dd></div>
+                    <div><dt>Method</dt><dd>@transaction.TransactionMethod</dd></div>
+                    <div><dt>Date</dt><dd>@transaction.TransactionDate.ToString("dd MMM yyyy HH:mm")</dd></div>
+                    <div><dt>Amount</dt><dd>@transaction.Amount.ToString("C", System.Globalization.CultureInfo.GetCultureInfo("en-GB"))</dd></div>
+                    <div><dt>Cleared date</dt><dd>@(transaction.ClearedDate?.ToString("dd MMM yyyy HH:mm") ?? "—")</dd></div>
+                    <div><dt>Status</dt><dd>@transaction.TransactionStatus</dd></div>
+                    <div><dt>Original payment reference</dt><dd>@(transaction.OriginalPaymentReference ?? "—")</dd></div>
+                    <div><dt>Payment reference</dt><dd>@transaction.PaymentReference</dd></div>
+                    <div><dt>Aggregated payment URN</dt><dd>@(transaction.AggregatedPaymentURN ?? "—")</dd></div>
+                    <div><dt>Liberata notified date</dt><dd>@(transaction.LiberataNotifiedDate?.ToString("dd MMM yyyy HH:mm") ?? "—")</dd></div>
+                    <div><dt>Liberata notified aggregated payment date</dt><dd>@(transaction.LiberataNotifiedAggregatedPaymentDate?.ToString("dd MMM yyyy HH:mm") ?? "—")</dd></div>
+                    <div><dt>Barclaycard transaction ID</dt><dd>@(transaction.BarclaycardTransactionId ?? "—")</dd></div>
+                    <div><dt>Last 4 digits</dt><dd>@(transaction.Last4DigitsCard ?? "—")</dd></div>
+                    <div><dt>Notes</dt><dd>@(transaction.Notes ?? "—")</dd></div>
+                    <div><dt>Expected date</dt><dd>@(transaction.ExpectedDate?.ToString("dd MMM yyyy HH:mm") ?? "—")</dd></div>
+                    <div><dt>Referring transaction ID</dt><dd>@(transaction.ReferringTransactionId?.ToString() ?? "—")</dd></div>
+                </dl>
+            </article>
+        }
         </div>
     }
 </section>
