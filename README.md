@@ -22,6 +22,11 @@ Transaction IDs are stored as PostgreSQL `bigint` values, so the CSV's
 `TransactionId` column must contain a signed 64-bit whole number.
 Transaction methods are stored as PostgreSQL `text` values and supplied in the
 CSV's `TransactionMethod` column.
+The upload also accepts `ClearedDate`, `AggregatedPaymentURN`,
+`LiberataNotifiedDate`, `LiberataNotifiedAggregatedPaymentDate`,
+`BarclaycardTransactionId`, `Last4DigitsCard`, `Notes`, `ExpectedDate`, and
+`ReferringTransactionId` columns. These fields are optional so that incomplete
+legacy transaction records can still be imported.
 
 ## Creating a service request through the API
 

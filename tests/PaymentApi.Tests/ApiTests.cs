@@ -297,8 +297,9 @@ public sealed class ApiTests(Factory factory) : IClassFixture<Factory>
     public async Task Transaction_csv_can_be_imported_and_displayed()
     {
         var transactionId = Random.Shared.NextInt64(1, long.MaxValue);
-        var csv = "TransactionId,CaseNo,TransactionType,TransactionMethod,TransactionDate,Amount,TransactionStatus,OriginalPaymentReference,PaymentReference\n" +
-                  $"{transactionId},1234567890123456,Appeal Fee,Online Card,2026-09-16T10:30:00Z,19.95,Success,RC-OLD,RC-NEW\n";
+        var referringId = Random.Shared.NextInt64(1, long.MaxValue);
+        var csv = "TransactionId,CaseNo,TransactionType,TransactionMethod,TransactionDate,Amount,ClearedDate,TransactionStatus,OriginalPaymentReference,PaymentReference,AggregatedPaymentURN,LiberataNotifiedDate,LiberataNotifiedAggregatedPaymentDate,BarclaycardTransactionId,Last4DigitsCard,Notes,ExpectedDate,ReferringTransactionId\n" +
+                  $"{transactionId},1234567890123456,Appeal Fee,Online Card,2026-09-16T10:30:00Z,19.95,2026-09-17T10:30:00Z,Success,RC-OLD,RC-NEW,URN-123,2026-09-18T10:30:00Z,2026-09-19T10:30:00Z,BC-456,1234,Imported transaction,2026-09-20T10:30:00Z,{referringId}\n";
 
         var response = await PostCsv(csv);
 
@@ -317,6 +318,15 @@ public sealed class ApiTests(Factory factory) : IClassFixture<Factory>
         Assert.Equal(19.95m, saved.Amount);
         Assert.Equal("Appeal Fee", saved.TransactionType);
         Assert.Equal("Online Card", saved.TransactionMethod);
+        Assert.Equal(new DateTimeOffset(2026, 9, 17, 10, 30, 0, TimeSpan.Zero), saved.ClearedDate);
+        Assert.Equal("URN-123", saved.AggregatedPaymentURN);
+        Assert.Equal(new DateTimeOffset(2026, 9, 18, 10, 30, 0, TimeSpan.Zero), saved.LiberataNotifiedDate);
+        Assert.Equal(new DateTimeOffset(2026, 9, 19, 10, 30, 0, TimeSpan.Zero), saved.LiberataNotifiedAggregatedPaymentDate);
+        Assert.Equal("BC-456", saved.BarclaycardTransactionId);
+        Assert.Equal("1234", saved.Last4DigitsCard);
+        Assert.Equal("Imported transaction", saved.Notes);
+        Assert.Equal(new DateTimeOffset(2026, 9, 20, 10, 30, 0, TimeSpan.Zero), saved.ExpectedDate);
+        Assert.Equal(referringId, saved.ReferringTransactionId);
     }
 
     [Fact]
