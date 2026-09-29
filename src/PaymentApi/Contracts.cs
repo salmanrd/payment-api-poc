@@ -71,9 +71,6 @@ public sealed class CreateLegacyPayment
     [Required, JsonPropertyName("legacySystem")]
     public string LegacySystem { get; init; } = null!;
 
-    [JsonPropertyName("transactionId")]
-    public string? TransactionId { get; init; }
-
     [Required, JsonPropertyName("legacyPaymentReference")]
     public string LegacyPaymentReference { get; init; } = null!;
 

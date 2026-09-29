@@ -121,8 +121,7 @@ public sealed class PaymentService(PaymentDbContext db, IPaymentProvider provide
     {
         var existing = await db.LegacyPaymentDetails.AsNoTracking().Include(x => x.Payment).ThenInclude(x => x.ServiceRequest)
             .FirstOrDefaultAsync(x => x.LegacySystem == request.LegacySystem &&
-                (x.LegacyPaymentReference == request.LegacyPaymentReference ||
-                    (request.TransactionId != null && x.TransactionId == request.TransactionId)), ct);
+                x.LegacyPaymentReference == request.LegacyPaymentReference, ct);
         if (existing is not null)
             return LegacyPaymentMatches(existing, serviceReference, request)
                 ? new(existing.Payment, null, false, false)
@@ -137,19 +136,6 @@ public sealed class PaymentService(PaymentDbContext db, IPaymentProvider provide
         if (serviceRequest.LegacyDetails.LegacySystem != request.LegacySystem)
             return new(null, "Legacy system does not match the service request", false, true);
 
-        TransactionEntity? sourceTransaction = null;
-        if (long.TryParse(request.TransactionId, out var transactionId))
-            sourceTransaction = await db.Transactions.AsNoTracking()
-                .SingleOrDefaultAsync(x => x.TransactionId == transactionId, ct);
-        if (sourceTransaction is not null &&
-            !string.Equals(sourceTransaction.TransactionType, "Payment", StringComparison.OrdinalIgnoreCase))
-            return new(null, "Transaction must have transaction type Payment", false, true);
-        if (sourceTransaction is not null && sourceTransaction.CaseNo != serviceRequest.CcdCaseNumber)
-            return new(null, "Transaction does not belong to the service request's case", false, true);
-        if (sourceTransaction is not null &&
-            (sourceTransaction.PaymentReference != request.LegacyPaymentReference || sourceTransaction.Amount != request.Amount))
-            return new(null, "Legacy payment reference or amount does not match the transaction", false, true);
-
         IDbContextTransaction? transaction = db.Database.IsRelational() ? await db.Database.BeginTransactionAsync(ct) : null;
         try
         {
@@ -161,7 +147,7 @@ public sealed class PaymentService(PaymentDbContext db, IPaymentProvider provide
                 History = [new() { Id = Guid.NewGuid(), Status = "Success", Created = now }],
                 LegacyDetails = new LegacyPaymentDetailsEntity
                 {
-                    Id = Guid.NewGuid(), LegacySystem = request.LegacySystem, TransactionId = request.TransactionId,
+                    Id = Guid.NewGuid(), LegacySystem = request.LegacySystem,
                     LegacyPaymentReference = request.LegacyPaymentReference,
                     ImportedAt = now
                 }
@@ -179,8 +165,7 @@ public sealed class PaymentService(PaymentDbContext db, IPaymentProvider provide
             db.ChangeTracker.Clear();
             var winner = await db.LegacyPaymentDetails.AsNoTracking().Include(x => x.Payment).ThenInclude(x => x.ServiceRequest)
                 .FirstOrDefaultAsync(x => x.LegacySystem == request.LegacySystem &&
-                    (x.LegacyPaymentReference == request.LegacyPaymentReference ||
-                        (request.TransactionId != null && x.TransactionId == request.TransactionId)), ct);
+                    x.LegacyPaymentReference == request.LegacyPaymentReference, ct);
             if (winner is null) throw;
             return LegacyPaymentMatches(winner, serviceReference, request)
                 ? new(winner.Payment, null, false, false)
