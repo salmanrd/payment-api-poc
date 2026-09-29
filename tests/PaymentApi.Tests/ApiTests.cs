@@ -152,7 +152,7 @@ public sealed class ApiTests(Factory factory) : IClassFixture<Factory>
     }
 
     [Fact]
-    public async Task Legacy_payment_does_not_require_a_transaction_id()
+    public async Task Legacy_payment_request_does_not_contain_a_transaction_id()
     {
         var caseNumber = $"case-{Guid.NewGuid():N}";
         var paymentTransactionId = Random.Shared.NextInt64(1, long.MaxValue);
@@ -171,10 +171,13 @@ public sealed class ApiTests(Factory factory) : IClassFixture<Factory>
         var sr = (await legacySr.Content.ReadFromJsonAsync<LegacyServiceRequestResponse>())!.ServiceRequestReference;
 
         var result = await client.PostAsJsonAsync($"/service-request/{sr}/legacy-payments", new { legacySystem = "fees-v1", legacyPaymentReference = "LP-789", amount = 11m, currency = "GBP" });
-        var discrepancy = await client.PostAsJsonAsync($"/service-request/{sr}/legacy-payments", new { legacySystem = "fees-v1", transactionId = paymentTransactionId, legacyPaymentReference = "LP-WRONG", amount = 11m, currency = "GBP" });
-
         Assert.Equal(HttpStatusCode.Created, result.StatusCode);
-        Assert.Equal(HttpStatusCode.Conflict, discrepancy.StatusCode);
+        Assert.Null(typeof(CreateLegacyPayment).GetProperty("TransactionId"));
+
+        using var checkScope = factory.Services.CreateScope();
+        var imported = await checkScope.ServiceProvider.GetRequiredService<PaymentDbContext>()
+            .LegacyPaymentDetails.SingleAsync(x => x.LegacyPaymentReference == "LP-789");
+        Assert.Null(imported.TransactionId);
     }
 
     [Fact] public async Task Invalid_service_request_is_rejected() { var r = await client.PostAsJsonAsync("/service-request", new { callBackUrl = "x", ccdCaseNumber = "", fees = Array.Empty<object>() }); Assert.Equal(HttpStatusCode.BadRequest, r.StatusCode); }
