@@ -138,6 +138,29 @@ public sealed class ImportModel(PaymentDbContext database, ILogger<ImportModel> 
                 var originalReference = positions.ContainsKey(NormaliseHeader("OriginalPaymentReference"))
                     ? Value("OriginalPaymentReference") : null;
 
+                DateTimeOffset? OptionalDate(string header)
+                {
+                    if (!positions.ContainsKey(NormaliseHeader(header)) || string.IsNullOrWhiteSpace(Value(header)))
+                        return null;
+                    if (!DateTimeOffset.TryParse(Value(header), CultureInfo.InvariantCulture,
+                            DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var value))
+                        throw InvalidValue(rowNumber, header);
+                    return value;
+                }
+
+                string? Optional(string header) =>
+                    positions.ContainsKey(NormaliseHeader(header)) && !string.IsNullOrWhiteSpace(Value(header))
+                        ? Value(header) : null;
+
+                long? OptionalLong(string header)
+                {
+                    if (!positions.ContainsKey(NormaliseHeader(header)) || string.IsNullOrWhiteSpace(Value(header)))
+                        return null;
+                    if (!long.TryParse(Value(header), NumberStyles.Integer, CultureInfo.InvariantCulture, out var value))
+                        throw InvalidValue(rowNumber, header);
+                    return value;
+                }
+
                 rows.Add(new TransactionEntity
                 {
                     TransactionId = transactionId,
@@ -146,9 +169,18 @@ public sealed class ImportModel(PaymentDbContext database, ILogger<ImportModel> 
                     TransactionMethod = method,
                     TransactionDate = transactionDate,
                     Amount = amount,
+                    ClearedDate = OptionalDate("ClearedDate"),
                     TransactionStatus = status,
                     OriginalPaymentReference = string.IsNullOrWhiteSpace(originalReference) ? null : originalReference,
-                    PaymentReference = paymentReference
+                    PaymentReference = paymentReference,
+                    AggregatedPaymentURN = Optional("AggregatedPaymentURN"),
+                    LiberataNotifiedDate = OptionalDate("LiberataNotifiedDate"),
+                    LiberataNotifiedAggregatedPaymentDate = OptionalDate("LiberataNotifiedAggregatedPaymentDate"),
+                    BarclaycardTransactionId = Optional("BarclaycardTransactionId"),
+                    Last4DigitsCard = Optional("Last4DigitsCard"),
+                    Notes = Optional("Notes"),
+                    ExpectedDate = OptionalDate("ExpectedDate"),
+                    ReferringTransactionId = OptionalLong("ReferringTransactionId")
                 });
             }
 

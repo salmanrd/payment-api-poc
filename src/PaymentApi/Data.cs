@@ -81,8 +81,17 @@ public sealed class TransactionEntity
     public string TransactionMethod { get; set; } = "";
     public DateTimeOffset TransactionDate { get; set; }
     public decimal Amount { get; set; }
+    public DateTimeOffset? ClearedDate { get; set; }
     public string TransactionStatus { get; set; } = "";
     public string? OriginalPaymentReference { get; set; }
     public string PaymentReference { get; set; } = "";
+    public string? AggregatedPaymentURN { get; set; }
+    public DateTimeOffset? LiberataNotifiedDate { get; set; }
+    public DateTimeOffset? LiberataNotifiedAggregatedPaymentDate { get; set; }
+    public string? BarclaycardTransactionId { get; set; }
+    public string? Last4DigitsCard { get; set; }
+    public string? Notes { get; set; }
+    public DateTimeOffset? ExpectedDate { get; set; }
+    public long? ReferringTransactionId { get; set; }
 }
 public sealed class StatusHistoryEntity { public Guid Id { get; set; } public Guid PaymentEntityId { get; set; } public string Status { get; set; } = ""; public DateTimeOffset Created { get; set; } }

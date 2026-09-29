@@ -35,9 +35,18 @@
                         <th>Method</th>
                         <th>Date</th>
                         <th>Amount</th>
+                        <th>Cleared date</th>
                         <th>Status</th>
                         <th>Original payment reference</th>
                         <th>Payment reference</th>
+                        <th>Aggregated payment URN</th>
+                        <th>Liberata notified date</th>
+                        <th>Liberata notified aggregated payment date</th>
+                        <th>Barclaycard transaction ID</th>
+                        <th>Last 4 digits</th>
+                        <th>Notes</th>
+                        <th>Expected date</th>
+                        <th>Referring transaction ID</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -50,9 +59,18 @@
                         <td>@transaction.TransactionMethod</td>
                         <td>@transaction.TransactionDate.ToString("dd MMM yyyy HH:mm")</td>
                         <td class="numeric">@transaction.Amount.ToString("C", System.Globalization.CultureInfo.GetCultureInfo("en-GB"))</td>
+                        <td>@(transaction.ClearedDate?.ToString("dd MMM yyyy HH:mm") ?? "—")</td>
                         <td>@transaction.TransactionStatus</td>
                         <td>@(transaction.OriginalPaymentReference ?? "—")</td>
                         <td>@transaction.PaymentReference</td>
+                        <td>@(transaction.AggregatedPaymentURN ?? "—")</td>
+                        <td>@(transaction.LiberataNotifiedDate?.ToString("dd MMM yyyy HH:mm") ?? "—")</td>
+                        <td>@(transaction.LiberataNotifiedAggregatedPaymentDate?.ToString("dd MMM yyyy HH:mm") ?? "—")</td>
+                        <td>@(transaction.BarclaycardTransactionId ?? "—")</td>
+                        <td>@(transaction.Last4DigitsCard ?? "—")</td>
+                        <td>@(transaction.Notes ?? "—")</td>
+                        <td>@(transaction.ExpectedDate?.ToString("dd MMM yyyy HH:mm") ?? "—")</td>
+                        <td>@(transaction.ReferringTransactionId?.ToString() ?? "—")</td>
                     </tr>
                 }
                 </tbody>
