@@ -21,6 +21,7 @@ public sealed class PaymentDbContext(DbContextOptions<PaymentDbContext> options)
         b.Entity<TransactionEntity>().HasKey(x => x.TransactionId);
         b.Entity<TransactionEntity>().Property(x => x.TransactionId).ValueGeneratedNever();
         b.Entity<TransactionEntity>().Property(x => x.Amount).HasPrecision(12, 2);
+        b.Entity<TransactionEntity>().Property(x => x.CcdCaseNumber).HasColumnName("CCDCasenumber");
         b.Entity<LegacyServiceRequestDetailsEntity>().HasIndex(x => new { x.LegacySystem, x.CcdCaseNumber }).IsUnique();
         b.Entity<LegacyServiceRequestDetailsEntity>()
             .HasOne(x => x.ServiceRequest).WithOne(x => x.LegacyDetails)
@@ -77,6 +78,7 @@ public sealed class TransactionEntity
 {
     public long TransactionId { get; set; }
     public string CaseNo { get; set; } = "";
+    public string CcdCaseNumber { get; set; } = "";
     public string TransactionType { get; set; } = "";
     public string TransactionMethod { get; set; } = "";
     public DateTimeOffset TransactionDate { get; set; }

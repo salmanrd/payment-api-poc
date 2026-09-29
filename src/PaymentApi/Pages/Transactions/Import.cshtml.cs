@@ -12,7 +12,7 @@ public sealed class ImportModel(PaymentDbContext database, ILogger<ImportModel> 
 
     private static readonly string[] RequiredHeaders =
     [
-        "TransactionId", "CaseNo", "TransactionType", "TransactionMethod",
+        "TransactionId", "CaseNo", "CCDCasenumber", "TransactionType", "TransactionMethod",
         "TransactionDate", "Amount", "TransactionStatus", "PaymentReference"
     ];
 
@@ -165,6 +165,7 @@ public sealed class ImportModel(PaymentDbContext database, ILogger<ImportModel> 
                 {
                     TransactionId = transactionId,
                     CaseNo = caseNo,
+                    CcdCaseNumber = Required(Value("CCDCasenumber"), rowNumber, "CCDCasenumber"),
                     TransactionType = type,
                     TransactionMethod = method,
                     TransactionDate = transactionDate,

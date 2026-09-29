@@ -37,6 +37,7 @@ public sealed class ApiTests(Factory factory) : IClassFixture<Factory>
             {
                 TransactionId = transactionId,
                 CaseNo = "1234567890123456",
+                CcdCaseNumber = "1620000000000001",
                 TransactionType = "Payment",
                 TransactionMethod = "Bank Transfer",
                 TransactionDate = DateTimeOffset.UtcNow,
@@ -52,6 +53,7 @@ public sealed class ApiTests(Factory factory) : IClassFixture<Factory>
         var saved = await checkScope.ServiceProvider.GetRequiredService<PaymentDbContext>()
             .Transactions.AsNoTracking().SingleAsync(x => x.TransactionId == transactionId);
         Assert.Equal("1234567890123456", saved.CaseNo);
+        Assert.Equal("1620000000000001", saved.CcdCaseNumber);
         Assert.Equal("Payment", saved.TransactionType);
         Assert.Equal("Bank Transfer", saved.TransactionMethod);
         Assert.Equal(10m, saved.Amount);
@@ -298,8 +300,8 @@ public sealed class ApiTests(Factory factory) : IClassFixture<Factory>
     {
         var transactionId = Random.Shared.NextInt64(1, long.MaxValue);
         var referringId = Random.Shared.NextInt64(1, long.MaxValue);
-        var csv = "TransactionId,CaseNo,TransactionType,TransactionMethod,TransactionDate,Amount,ClearedDate,TransactionStatus,OriginalPaymentReference,PaymentReference,AggregatedPaymentURN,LiberataNotifiedDate,LiberataNotifiedAggregatedPaymentDate,BarclaycardTransactionId,Last4DigitsCard,Notes,ExpectedDate,ReferringTransactionId\n" +
-                  $"{transactionId},1234567890123456,Appeal Fee,Online Card,2026-09-16T10:30:00Z,19.95,2026-09-17T10:30:00Z,Success,RC-OLD,RC-NEW,URN-123,2026-09-18T10:30:00Z,2026-09-19T10:30:00Z,BC-456,1234,Imported transaction,2026-09-20T10:30:00Z,{referringId}\n";
+        var csv = "TransactionId,CaseNo,CCDCasenumber,TransactionType,TransactionMethod,TransactionDate,Amount,ClearedDate,TransactionStatus,OriginalPaymentReference,PaymentReference,AggregatedPaymentURN,LiberataNotifiedDate,LiberataNotifiedAggregatedPaymentDate,BarclaycardTransactionId,Last4DigitsCard,Notes,ExpectedDate,ReferringTransactionId\n" +
+                  $"{transactionId},case-123,1620000000000001,Appeal Fee,Online Card,2026-09-16T10:30:00Z,19.95,2026-09-17T10:30:00Z,Success,RC-OLD,RC-NEW,URN-123,2026-09-18T10:30:00Z,2026-09-19T10:30:00Z,BC-456,1234,Imported transaction,2026-09-20T10:30:00Z,{referringId}\n";
 
         var response = await PostCsv(csv);
 
@@ -315,6 +317,7 @@ public sealed class ApiTests(Factory factory) : IClassFixture<Factory>
         var saved = await scope.ServiceProvider.GetRequiredService<PaymentDbContext>().Transactions
             .AsNoTracking().SingleAsync(transaction => transaction.TransactionId == transactionId);
         Assert.Equal("RC-OLD", saved.OriginalPaymentReference);
+        Assert.Equal("1620000000000001", saved.CcdCaseNumber);
         Assert.Equal(19.95m, saved.Amount);
         Assert.Equal("Appeal Fee", saved.TransactionType);
         Assert.Equal("Online Card", saved.TransactionMethod);
@@ -333,16 +336,19 @@ public sealed class ApiTests(Factory factory) : IClassFixture<Factory>
     public async Task Transactions_can_be_searched_by_partial_case_number_newest_first()
     {
         var searchToken = Guid.NewGuid().ToString("N")[..8];
+        var ccdSearchToken = Guid.NewGuid().ToString("N")[..8];
         var olderId = Random.Shared.NextInt64(1, long.MaxValue);
         var newerId = Random.Shared.NextInt64(1, long.MaxValue);
         var unrelatedId = Random.Shared.NextInt64(1, long.MaxValue);
+        var ccdMatchId = Random.Shared.NextInt64(1, long.MaxValue);
         using (var scope = factory.Services.CreateScope())
         {
             var database = scope.ServiceProvider.GetRequiredService<PaymentDbContext>();
             database.Transactions.AddRange(
                 Transaction(olderId, $"Case-{searchToken}-A", new DateTimeOffset(2026, 9, 15, 10, 0, 0, TimeSpan.Zero)),
                 Transaction(newerId, $"CASE-{searchToken}-B", new DateTimeOffset(2026, 9, 16, 10, 0, 0, TimeSpan.Zero)),
-                Transaction(unrelatedId, $"case-unrelated-{Guid.NewGuid():N}", new DateTimeOffset(2026, 9, 17, 10, 0, 0, TimeSpan.Zero)));
+                Transaction(unrelatedId, $"case-unrelated-{Guid.NewGuid():N}", new DateTimeOffset(2026, 9, 17, 10, 0, 0, TimeSpan.Zero)),
+                Transaction(ccdMatchId, "case-with-ccd-match", new DateTimeOffset(2026, 9, 18, 10, 0, 0, TimeSpan.Zero), $"CCD-{ccdSearchToken}"));
             await database.SaveChangesAsync();
         }
 
@@ -353,12 +359,17 @@ public sealed class ApiTests(Factory factory) : IClassFixture<Factory>
         Assert.DoesNotContain(unrelatedId.ToString(), html);
         Assert.True(html.IndexOf(newerId.ToString(), StringComparison.Ordinal) <
                     html.IndexOf(olderId.ToString(), StringComparison.Ordinal));
+
+        var ccdHtml = await client.GetStringAsync($"/transactions?caseNo={ccdSearchToken.ToUpperInvariant()}");
+        Assert.Contains(ccdMatchId.ToString(), ccdHtml);
+        Assert.DoesNotContain(unrelatedId.ToString(), ccdHtml);
     }
 
-    private static TransactionEntity Transaction(long id, string caseNo, DateTimeOffset date) => new()
+    private static TransactionEntity Transaction(long id, string caseNo, DateTimeOffset date, string? ccdCaseNumber = null) => new()
     {
         TransactionId = id,
         CaseNo = caseNo,
+        CcdCaseNumber = ccdCaseNumber ?? $"CCD-{caseNo}",
         TransactionType = "Payment",
         TransactionMethod = "Bank Transfer",
         TransactionDate = date,
@@ -371,9 +382,9 @@ public sealed class ApiTests(Factory factory) : IClassFixture<Factory>
     public async Task Transaction_csv_over_100_rows_is_rejected_without_importing_any_rows()
     {
         var ids = Enumerable.Range(1, 101).Select(value => (long)value).ToArray();
-        var csv = new StringBuilder("TransactionId,CaseNo,TransactionType,TransactionMethod,TransactionDate,Amount,TransactionStatus,PaymentReference\n");
+        var csv = new StringBuilder("TransactionId,CaseNo,CCDCasenumber,TransactionType,TransactionMethod,TransactionDate,Amount,TransactionStatus,PaymentReference\n");
         foreach (var id in ids)
-            csv.AppendLine($"{id},case-1,Payment,Bank Transfer,2026-09-16T10:30:00Z,10.00,Success,RC-{id}");
+            csv.AppendLine($"{id},case-1,1620000000000001,Payment,Bank Transfer,2026-09-16T10:30:00Z,10.00,Success,RC-{id}");
 
         var response = await PostCsv(csv.ToString());
         var html = await response.Content.ReadAsStringAsync();
@@ -389,9 +400,9 @@ public sealed class ApiTests(Factory factory) : IClassFixture<Factory>
     public async Task Transaction_csv_with_missing_method_is_rejected_without_importing_valid_rows()
     {
         var validId = Random.Shared.NextInt64(1, long.MaxValue);
-        var csv = "TransactionId,CaseNo,TransactionType,TransactionMethod,TransactionDate,Amount,TransactionStatus,PaymentReference\n" +
-                  $"{validId},case-1,Payment,Bank Transfer,2026-09-16T10:30:00Z,10.00,Success,RC-VALID\n" +
-                  $"{Random.Shared.NextInt64(1, long.MaxValue)},case-2,Payment,,2026-09-16T10:30:00Z,10.00,Success,RC-INVALID\n";
+        var csv = "TransactionId,CaseNo,CCDCasenumber,TransactionType,TransactionMethod,TransactionDate,Amount,TransactionStatus,PaymentReference\n" +
+                  $"{validId},case-1,1620000000000001,Payment,Bank Transfer,2026-09-16T10:30:00Z,10.00,Success,RC-VALID\n" +
+                  $"{Random.Shared.NextInt64(1, long.MaxValue)},case-2,1620000000000002,Payment,,2026-09-16T10:30:00Z,10.00,Success,RC-INVALID\n";
 
         var response = await PostCsv(csv);
         var html = await response.Content.ReadAsStringAsync();
@@ -406,8 +417,8 @@ public sealed class ApiTests(Factory factory) : IClassFixture<Factory>
     [Fact]
     public async Task Non_numeric_transaction_id_is_rejected()
     {
-        var csv = "TransactionId,CaseNo,TransactionType,TransactionMethod,TransactionDate,Amount,TransactionStatus,PaymentReference\n" +
-                  $"{Guid.NewGuid()},case-1,Payment,Bank Transfer,2026-09-16T10:30:00Z,10.00,Success,RC-INVALID\n";
+        var csv = "TransactionId,CaseNo,CCDCasenumber,TransactionType,TransactionMethod,TransactionDate,Amount,TransactionStatus,PaymentReference\n" +
+                  $"{Guid.NewGuid()},case-1,1620000000000001,Payment,Bank Transfer,2026-09-16T10:30:00Z,10.00,Success,RC-INVALID\n";
 
         var response = await PostCsv(csv);
         var html = await response.Content.ReadAsStringAsync();

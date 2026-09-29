@@ -18,7 +18,9 @@ public sealed class IndexModel(PaymentDbContext database) : PageModel
         if (!string.IsNullOrWhiteSpace(CaseNo))
         {
             var term = CaseNo.Trim().ToLower();
-            transactions = transactions.Where(transaction => transaction.CaseNo.ToLower().Contains(term));
+            transactions = transactions.Where(transaction =>
+                transaction.CaseNo.ToLower().Contains(term) ||
+                transaction.CcdCaseNumber.ToLower().Contains(term));
         }
 
         Transactions = await transactions
