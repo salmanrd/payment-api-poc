@@ -359,6 +359,9 @@ public sealed class ApiTests(Factory factory) : IClassFixture<Factory>
         Assert.DoesNotContain(unrelatedId.ToString(), html);
         Assert.True(html.IndexOf(newerId.ToString(), StringComparison.Ordinal) <
                     html.IndexOf(olderId.ToString(), StringComparison.Ordinal));
+        Assert.Contains("Display as", html);
+        Assert.Contains("transaction-table-view", html);
+        Assert.Contains("Transactions in tabular format", html);
 
         var ccdHtml = await client.GetStringAsync($"/transactions?caseNo={ccdSearchToken.ToUpperInvariant()}");
         Assert.Contains(ccdMatchId.ToString(), ccdHtml);
