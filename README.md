@@ -29,6 +29,8 @@ The upload also accepts `ClearedDate`, `AggregatedPaymentURN`,
 `BarclaycardTransactionId`, `Last4DigitsCard`, `Notes`, `ExpectedDate`, and
 `ReferringTransactionId` columns. These fields are optional so that incomplete
 legacy transaction records can still be imported.
+All date columns accept `dd/MM/yyyy` and ISO 8601. Ambiguous slash dates such as
+`05/06/2026` are interpreted as 5 June. Dates without a time zone use UTC.
 
 ## Creating a service request through the API
 
