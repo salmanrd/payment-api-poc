@@ -14,11 +14,15 @@ namespace PaymentApi.Tests;
 
 public sealed class Factory : WebApplicationFactory<Program>
 {
-    protected override void ConfigureWebHost(IWebHostBuilder builder) => builder.ConfigureServices(services =>
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        var descriptor = services.Single(x => x.ServiceType == typeof(DbContextOptions<PaymentDbContext>)); services.Remove(descriptor);
-        services.AddDbContext<PaymentDbContext>(o => o.UseInMemoryDatabase(Guid.NewGuid().ToString()));
-    });
+        var databaseName = Guid.NewGuid().ToString();
+        builder.ConfigureServices(services =>
+        {
+            var descriptor = services.Single(x => x.ServiceType == typeof(DbContextOptions<PaymentDbContext>)); services.Remove(descriptor);
+            services.AddDbContext<PaymentDbContext>(o => o.UseInMemoryDatabase(databaseName));
+        });
+    }
 }
 public sealed class ApiTests(Factory factory) : IClassFixture<Factory>
 {
@@ -333,6 +337,58 @@ public sealed class ApiTests(Factory factory) : IClassFixture<Factory>
         Assert.Equal("Imported transaction", saved.Notes);
         Assert.Equal(new DateTimeOffset(2026, 9, 20, 10, 30, 0, TimeSpan.Zero), saved.ExpectedDate);
         Assert.Equal(referringId, saved.ReferringTransactionId);
+    }
+
+    [Theory]
+    [InlineData("16/09/2026", 2026, 9, 16)]
+    [InlineData("05/06/2026", 2026, 6, 5)]
+    [InlineData("29/02/2024", 2024, 2, 29)]
+    [InlineData("09/16/2026", 2026, 9, 16)]
+    [InlineData("2026-09-16T01:00:00+01:00", 2026, 9, 16)]
+    public async Task Transaction_csv_dates_are_imported_as_expected(string date, int year, int month, int day)
+    {
+        var id = Random.Shared.NextInt64(1, long.MaxValue);
+        var csv = "TransactionId,CaseNo,CCDCasenumber,TransactionType,TransactionMethod,TransactionDate,Amount,TransactionStatus,PaymentReference,ClearedDate,LiberataNotifiedDate,LiberataNotifiedAggregatedPaymentDate,ExpectedDate\n" +
+                  $"{id},case-1,1620000000000001,Payment,Bank Transfer,{date},10.00,Success,RC-DATE,{date},{date},{date},{date}\n";
+
+        var response = await PostCsv(csv);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        using var scope = factory.Services.CreateScope();
+        var saved = await scope.ServiceProvider.GetRequiredService<PaymentDbContext>().Transactions
+            .AsNoTracking().SingleAsync(transaction => transaction.TransactionId == id);
+        var expected = new DateTimeOffset(year, month, day, 0, 0, 0, TimeSpan.Zero);
+        Assert.Equal(expected, saved.TransactionDate);
+        Assert.Equal(expected, saved.ClearedDate);
+        Assert.Equal(expected, saved.LiberataNotifiedDate);
+        Assert.Equal(expected, saved.LiberataNotifiedAggregatedPaymentDate);
+        Assert.Equal(expected, saved.ExpectedDate);
+    }
+
+    [Theory]
+    [InlineData("TransactionDate", "31/02/2026")]
+    [InlineData("ClearedDate", "29/02/2025")]
+    [InlineData("LiberataNotifiedDate", "not-a-date")]
+    [InlineData("LiberataNotifiedAggregatedPaymentDate", "32/01/2026")]
+    [InlineData("ExpectedDate", "16/13/2026")]
+    public async Task Transaction_csv_invalid_dates_do_not_import_any_rows(string column, string invalidDate)
+    {
+        var validId = Random.Shared.NextInt64(1, long.MaxValue);
+        var invalidId = Random.Shared.NextInt64(1, long.MaxValue);
+        var optionalHeader = column == "TransactionDate" ? "" : $",{column}";
+        var transactionDate = column == "TransactionDate" ? invalidDate : "16/09/2026";
+        var optionalValue = column == "TransactionDate" ? "" : $",{invalidDate}";
+        var csv = $"TransactionId,CaseNo,CCDCasenumber,TransactionType,TransactionMethod,TransactionDate,Amount,TransactionStatus,PaymentReference{optionalHeader}\n" +
+                  $"{validId},case-1,1620000000000001,Payment,Bank Transfer,16/09/2026,10.00,Success,RC-VALID\n" +
+                  $"{invalidId},case-2,1620000000000002,Payment,Bank Transfer,{transactionDate},10.00,Success,RC-INVALID{optionalValue}\n";
+
+        var response = await PostCsv(csv);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains($"Row 3 has a missing or invalid {column}", await response.Content.ReadAsStringAsync());
+        using var scope = factory.Services.CreateScope();
+        Assert.False(await scope.ServiceProvider.GetRequiredService<PaymentDbContext>().Transactions
+            .AnyAsync(transaction => transaction.TransactionId == validId || transaction.TransactionId == invalidId));
     }
 
     [Fact]

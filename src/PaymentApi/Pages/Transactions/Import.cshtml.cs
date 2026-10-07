@@ -124,8 +124,7 @@ public sealed class ImportModel(PaymentDbContext database, ILogger<ImportModel> 
                 if (!long.TryParse(Value("TransactionId"), NumberStyles.Integer,
                         CultureInfo.InvariantCulture, out var transactionId))
                     throw InvalidValue(rowNumber, "TransactionId");
-                if (!DateTimeOffset.TryParse(Value("TransactionDate"), CultureInfo.InvariantCulture,
-                        DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var transactionDate))
+                if (!TryParseDate(Value("TransactionDate"), out var transactionDate))
                     throw InvalidValue(rowNumber, "TransactionDate");
                 if (!decimal.TryParse(Value("Amount"), NumberStyles.Number, CultureInfo.InvariantCulture, out var amount))
                     throw InvalidValue(rowNumber, "Amount");
@@ -142,8 +141,7 @@ public sealed class ImportModel(PaymentDbContext database, ILogger<ImportModel> 
                 {
                     if (!positions.ContainsKey(NormaliseHeader(header)) || string.IsNullOrWhiteSpace(Value(header)))
                         return null;
-                    if (!DateTimeOffset.TryParse(Value(header), CultureInfo.InvariantCulture,
-                            DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var value))
+                    if (!TryParseDate(Value(header), out var value))
                         throw InvalidValue(rowNumber, header);
                     return value;
                 }
@@ -192,6 +190,14 @@ public sealed class ImportModel(PaymentDbContext database, ILogger<ImportModel> 
         {
             throw new CsvImportException($"The CSV is malformed near line {exception.LineNumber}.");
         }
+    }
+
+    private static bool TryParseDate(string value, out DateTimeOffset date)
+    {
+        const DateTimeStyles styles = DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal;
+        // Prefer day/month/year so ambiguous slash dates are not silently reversed.
+        return DateTimeOffset.TryParseExact(value, "dd/MM/yyyy", CultureInfo.InvariantCulture, styles, out date)
+            || DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, styles, out date);
     }
 
     private static string NormaliseHeader(string header) =>

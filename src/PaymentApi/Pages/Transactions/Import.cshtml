@@ -33,6 +33,7 @@
                 TransactionId must be a whole number in the signed 64-bit integer range.
                 TransactionMethod is stored as text.
                 OriginalPaymentReference is optional.
+                Dates can use dd/MM/yyyy or ISO 8601. Ambiguous slash dates are read as day/month/year.
             </div>
             <input asp-for="CsvFile" type="file" accept=".csv,text/csv" aria-describedby="csv-hint" />
         </div>
